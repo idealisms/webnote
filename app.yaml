@@ -1,0 +1,50 @@
+runtime: python27
+api_version: 1
+threadsafe: true
+
+libraries:
+- name: jinja2
+  version: latest
+- name: pytz
+  version: latest
+
+handlers:
+- url: /webnote/
+  static_files: index.html
+  upload: index.html
+
+- url: /webnote/FAQ\.html
+  static_files: FAQ.html
+  upload: FAQ\.html
+- url: /webnote/hints\.html
+  static_files: hints.html
+  upload: hints\.html
+- url: /webnote/webnote_favicon\.ico
+  static_files: webnote_favicon.ico
+  upload: webnote_favicon\.ico
+- url: /webnote/wp-layout\.css
+  static_files: wp-layout.css
+  upload: wp-layout\.css
+- url: /webnote/style\.css
+  static_files: style.css
+  upload: style\.css
+- url: /webnote/objects\.js
+  static_files: objects.js
+  upload: objects\.js
+- url: /webnote/webnote\.js
+  static_files: webnote.js
+  upload: webnote\.js
+- url: /webnote/images
+  static_dir: images
+
+
+- url: /.*
+  script: main.app
+
+skip_files:
+- ^(.*/)?#.*#$
+- ^(.*/)?.*~$
+- ^(.*/)?.*\.py[co]$
+- ^(.*/)?.*/RCS/.*$
+- ^(.*/)?\..*$
+- ^env/.*$

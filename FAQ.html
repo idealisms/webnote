@@ -1,0 +1,80 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<head>
+    <title>Webnote - FAQ</title>
+    <link rel="stylesheet" href="style.css" type="text/css" />
+    <style type="text/css">
+h2 {
+    margin: 8px 0px 8px 0px;
+    text-align: left;
+}
+h3 {
+    margin: 4px;
+    text-align: center;
+}
+li {
+    margin: 2px 2px 2px 16px;
+}
+    </style>
+</head>
+
+<body>
+    <div class='tnote' style='margin: 30px 20% 10px 20%;'>
+        <h2><a href="index.html">Webnote</a> - <acronym title='frequently asked questions'>FAQ</acronym></h2>
+
+        <ul>
+            <li>
+                <span style='font-style: italic;'>What browsers will Webnote work in?</span>
+                
+                <blockquote>I test the system in Firefox, Internet Explorer
+                5.5 (Windows), Internet Expoer 6.x, Opera 8+, and Safari
+                1.3+.</blockquote>
+            </li>
+            <li>
+                <span style='font-style: italic;'>Can I use Webnote to store my own notes?</span>
+                <blockquote>Sure, use it for anything legal.  I have no
+                intentions of charging money in the future or deleting your
+                notes.</blockquote>
+            </li>
+            <li>
+                <span style='font-style: italic;'>How are people using Webnote?</span>
+                <blockquote>Some use it to store pictures, others have used it to
+                <a href="http://slartibartfast.ultralab.net/~stephenp/blog/archives/001027.html">give presentations</a>.
+                It has even been used for real time collaboration (sorry, no link due to server load issues).<br /><br />
+                Personally, I just use it to jot down some notes like an electronic TODO list.
+                </blockquote>
+            </li>
+            <li>
+                <span style='font-style: italic;'>Can I password protect my notes?</span>
+
+                <blockquote>Not right now.  If you want to password protect
+                the notes, you could 
+                <a href='http://www.aypwip.org/cvs/index.pl/webnote/'>install
+                Webnote</a> on your own server and use your favorite
+                authentication method (apache .htaccess, ssl, whatever).
+                <br /><br />
+                
+                The main reason for this is that it is difficult to prevent
+                <a href="http://en.wikipedia.org/wiki/XSS">cross site
+                scripting</a> and allow users to put arbitrary HTML and
+                javascript in a note.  I think the flexibility to put
+                javascript in notes is more important than being able to
+                password protect notes.<br /><br />
+                
+                Another reason I haven't implemented such a thing is because
+                I like the ability of being able to share notes by just
+                sharing a URL.
+                </blockquote>
+            </li>
+            <li>
+                <span style='font-style: italic;'>Why don't you just use a wiki?</span>
+                <blockquote>I use different tools for different types of 
+                notes. For me, a wiki is good for collaboration and
+                organizing lots of text (with hyperlinks), but bad at
+                visually organizing ideas on one screen.
+                </blockquote>
+            </li>
+        </ul>
+    </div>
+</body>
+</html>

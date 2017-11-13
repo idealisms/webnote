@@ -1,0 +1,76 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<head>
+    <meta http-equiv="X-UA-Compatible" content="IE=EmulateIE8">
+    <link rel="start"  type="text/html" href="/webnote/"
+         title="Webnote - an online tool for taking notes">
+    <link rel="SHORTCUT ICON" href="webnote_favicon.ico" type="image/x-icon">
+    <script type="text/javascript" src="objects.js"></script>
+    <script type="text/javascript" src="strings.js"></script>
+    <script type="text/javascript" src="webnote.js"></script>
+    <script type="text/javascript">
+
+<!--
+function loadinit()
+{
+  debugOn = {{ debugOn }};
+  workspace.setName(unescape('{{ name }}'));
+  workspace.loadedTime = '{{ lasttime }}';
+  adminEmail = '{{ HELPEMAIL }}';
+  baseURI = '/webnote/';
+  numDates = {{ NUM_DATES }};
+  init();
+
+  var notes = {{ notes }};
+  for (var n in notes) {
+    var note = notes[n];
+    note['text'] = unescape(note['text']);
+    workspace.createNote(note, true);    
+  }
+
+{#
+    # set workspace information
+    # this happens after the notes are made to prevent the
+    # nextNoteNum from incrementing unnecessarily
+#}
+  workspace.nextNoteNum = {{ nextNoteNum }};
+  workspace.changed = false;
+
+{% if newNoteText %}
+  workspace.createNote({'text': '{{ newNoteText }}'});"
+{% endif %}
+}
+// -->
+    </script>
+    <link rel="stylesheet" href="style.css" type="text/css" />"""
+    {{ CUSTOMHEADER }}
+    <title> {{ name }}</title>
+</head>
+<body onload='loadinit();' style='background-color: #f0f0f0;'>
+  <div id='content'>
+    <div id='toolbar'>
+        <div class='controls'>
+          <img id="newImg" src='images/new.gif' class='controls' onclick="workspace.createNote()" alt='new note icon' />
+          <img id="saveImg" src='images/save.gif' class='controlsDisabled' onclick="workspace.save()" alt='disk icon (save)' />
+          <img id="reloadImg" src='images/reload.gif' class='controls' onclick="workspace.loadlist()" alt='reload icon' />
+          <img id="undoImg" src='images/undo.gif' class='controlsDisabled' onclick="workspace.history.undo()" alt='undo icon' />
+          <img id="redoImg" src='images/redo.gif' class='controlsDisabled' onclick="workspace.history.redo()" alt='redo icon' />
+        </div>
+        <div id='filters'>
+            <input style='width: 135px; padding: 1px 2px 1px 2px;' id='textfilter' onchange='workspace.filter(this.value)' onkeydown='if(13==event.keyCode){workspace.filter(this.value);}; event.cancelBubble=true;'/>
+            <!-- this button is strictly for looks -->
+            <input style='width: 50px;' type='button' value='filter' />
+        </div>
+        <div id='mini'>
+        </div>
+        <div id='links'>
+          <a id='rsslink' href="%s.xml"><img style='margin: 6px 2px;border:0;width:19px;height:9px;' src='images/minixml.gif' /></a>
+        </div>
+        <div id='wsname'>
+        </div>
+    </div>
+    <div id='db'></div>
+  </div>
+</body>
+</html>

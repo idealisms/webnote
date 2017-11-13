@@ -1,0 +1,170 @@
+body {
+  font-family: Arial, helvetica, sans-serif;
+  font-size: 1em;
+  background-color: #f0f0f0;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
+
+div {
+  font-family: Arial, helvetica, sans-serif;
+  font-size: 1em;
+}
+
+#content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+}
+
+textarea {
+  font-family: Arial, helvetica, sans-serif;
+  font-size: 1em;
+  word-wrap: break-word;
+}
+
+div.tnote {
+  font-family: Arial, helvetica, sans-serif;
+  font-size: 1em;
+  border: 3px #000 solid;
+  padding: 4px;
+  background: #ffff30;
+  word-wrap: break-word;
+}
+
+div.note {
+  font-family: Arial, helvetica, sans-serif;
+  font-size: 100%;
+  word-wrap: break-word;
+  overflow: auto;
+}
+div.noteHide {
+  font-family: Arial, helvetica, sans-serif;
+  word-wrap: break-word;
+  overflow: auto;
+  filter:alpha(opacity=20);
+  opacity: 0.2;
+}
+
+div.mininote {
+  width: 6px;
+  height: 7px;
+  border: 1px #000 solid;
+  margin: 1px 1px 2px 1px;
+  float: left;
+  font-size: 1px;
+}
+
+h1 {
+  margin: 3px 0;
+}
+h2 {
+  margin: 2px 0;
+}
+h3 {
+  margin: 1px 0;
+}
+
+#toolbar {
+  border-bottom: 1px #000 solid;
+  margin: 0;
+  height: 24px;
+  background-color: #c0c0c0;
+  position: fixed;
+  width: 100%;
+}
+div.controls {
+  float: left;
+  width: 112px;
+  height: 23px;
+  border: 0;
+  margin-left: 4px;
+  padding-top: 2px;
+}
+img.controls {
+  margin: 1px;
+  width: 16px;
+  height: 16px;
+}
+img.controls:hover {
+  background-color: #808080;
+}
+img.controlsDisabled {
+  margin: 1px;
+  width: 16px;
+  height: 16px;
+  opacity:0.5;
+}
+img.controls:hover {
+  background-color: #808080;
+}
+
+#wsname {
+  font-weight: bold;
+  font-size: 20px;
+  border: 0;
+  height: 24px;
+  margin: 0 300px 0 142px;
+  padding-left: 10px;
+  border-left: 1px #000 dotted;
+}
+#links {
+  float:left;
+  height: 24px;
+  border-left: 1px #000 dotted;
+}
+#mini {
+  height: 23px;
+  width: 51px;
+  float: right;
+  padding: 1px 0 0 1px;
+  margin: 0 4px 0 0;
+  font-size: 1px;
+  border-left: 1px #000 dotted;
+  border-right: 1px #000 dotted;
+}
+
+#filters {
+  float: right;
+  height: 23px;
+  width: 200px;
+  border: 0;
+  margin-right: 0;
+  padding-top: 2px;
+}
+#filters input {
+  border: 1px #000 solid;
+  margin: 0;
+  font-size: 0.75em;
+}
+
+ul.wsButtons {
+  list-style-type: none;
+  display: inline;
+}
+
+input,select {
+  margin: 1px;
+  border: 1px #000 solid;
+}
+
+input.cmd {
+  width: 140px;
+  margin: 2px 0;
+  border: 1px #000 solid;
+}
+
+a.fakelink {
+  color: blue;
+  text-decoration: underline;
+  cursor: pointer;
+}
+select.loadfrm option {
+}

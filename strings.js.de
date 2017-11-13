@@ -1,0 +1,63 @@
+var strings = {
+  ICON_NEW_NOTE: 'neues Notiz',
+  ICON_SAVE: 'Arbeitsplatz speichern',
+  ICON_LOAD: 'vorhergehende Version laden',
+  FILTER_TITLE: 'gib einen regul\u004Aren ausdruck zum filtern an',
+  RSS_LINK_TITLE: 'rss feed f\u00FCr diese notizen',
+
+  NOTE_TOOLTIP: 'doppelklicken um zu editieren',
+  UNLOAD_WARNING: 'Deine Notizen wurden nicht gespeichert und es kann sein das Du einige Daten verlierst.',
+
+  // $1 is a number (key)
+  COLOR_SWATCH_TOOLTIP: 'dr\u00FCcke $1 wenn Du nicht im Editiermodus bist um diese Farbe zu verwenden',
+  CLOSE_ICON_ALT: 'schliessen',
+  CLOSE_ICON_TOOLTIP: 'diese Notiz l\u00F6schen',
+
+  HISTORY_CREATE_NOTE: 'Notiz erstellen',  
+  HISTORY_MOVE_NOTE: 'Notiz verschieben',
+  HISTORY_MOVE_NOTES: 'Notizen verschieben',
+  HISTORY_DELETE_NOTE: 'Notiz l\u00F6schen',
+  HISTORY_CHANGE_NOTE_COLOR: 'Farbe wechseln',
+  HISTORY_RESIZE_NOTE: 'Notiz skalieren',
+  HISTORY_EDIT_NOTE: 'Notiz editieren',
+  
+  HISTORY_UNDO_EMPTY: 'Nichts r\u00FCckg\u00E4ngig zu machen',
+  HISTORY_REDO_EMPTY: 'Nichts nochmal zu tun',
+  // $1 is the action action tooltip, $2 is the number of actions
+  HISTORY_UNDO_TOOLTIP: '$1 ($2 Aktion)',
+  HISTORY_UNDO_TOOLTIPS: '$1 ($2 Aktionen)',
+
+  MINI_NO_NOTES: 'Du hast keine Notizen',
+  MINI_SHOWING_ALL: 'zeige alle $1 Notizen',
+  MINI_HIDING_ALL: 'verstecke alle $1 Notizen',
+  MINI_SHOWING_PARTIAL: 'Zeige $1 von $2 Notiz(en)',
+
+  // Used when filtering by a color
+  COLOR: 'Farbe',
+  COLOR_YELLOW: 'gelb',
+  COLOR_BLUE: 'blau',
+  COLOR_GREEN: 'gr\u00FCn',
+  COLOR_RED: 'rot',
+  COLOR_ORANGE: 'orange',
+  COLOR_PURPLE: 'violett',
+  COLOR_WHITE: 'weiss',
+  COLOR_GREY: 'grau',
+
+  BOOKMARKLET_TEXT: 'Dies ist ein Bookmarklet um schnell neue Notizen hinzuzuf\u00FCgen. Du kannst jetzt schnell eine neue Notiz erstellen indem Du den Text einer Webseite ausw\u00EAhlst und dann dein Lesezeichen klickst.',
+  BOOKMARKLET_NAME: 'neue Notiz',
+  
+  LOADVERSIONS_ABOUT: 'Wenn Du eine vorhergehende Version dieses Arbeitsplatzes laden m\u00F6chtest, w\u00E4hle die Zeit aus der Liste und dr\u00FCcke load.',
+  LOADVERSIONS_OLDER: '\u00E4lter',
+  LOADVERSIONS_NEWER: 'neuer',
+  LOADVERSIONS_DATE_NOTE: 'alle Zeiten sind in US Eastern Time (-0500)',
+  LOADVERSIONS_INIT: 'Rufe versionen ab...',
+  LOADVERSIONS_NONE: 'Keine Versionen gefunden.  Keine Notizen wurden auf diesem Arbeitsplatz gespeichert.',
+
+  COLLISION_WARNING: "Dieser Arbeitsplatz wurde von jemand anderem ver\u00E4ndert w\u00E4hrend Du daran gearbeitet hast. Wenn Du sehen willst wie der Arbeitsplatz jetzt aussieht, kannst Du den<a href='$1' target='_new'>Arbeitsplatz in einem neuen Fenster \u00F6ffnen</a>.",
+  
+  SAVE_STATUS_ERROR: 'Speichern der Notizen ist fehlgeschlagen.  Bitte stelle sicher das du eine Verbindung mit dem Internet hast und versuche es erneut.',
+  // $1 is the email address of the admin
+  SAVE_SERVER_ERROR: 'Speichern der Notiyen ist fehlgeschlagen. Es gibt ein Problem mit dem Server. Bitte versuche es in einigen Minuten erneut.  Wenn das Problem weiterhin besteht, sende bitte eine Email an $1.'
+};
+
+// DATE_FORMAT: "%d.%m.%Y %G:%i:%s"

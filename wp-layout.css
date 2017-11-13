@@ -1,0 +1,169 @@
+acronym, abbr, span.caps {
+	font-size: 90%;
+	letter-spacing: .07em;
+}
+
+acronym, abbr {
+	cursor: help;
+}
+
+body {
+  font-family: Arial, helvetica, sans-serif;
+  font-size: 1em;
+  background-color: #f0f0f0;
+  margin: 0;
+  padding: 0;
+}
+
+div {
+  font-family: Arial, helvetica, sans-serif;
+  font-size: 1em;
+}
+
+blockquote {
+	border-left: 5px solid #ccc;
+	margin-left: 1.5em;
+	padding-left: 5px;
+}
+
+cite {
+	font-size: 90%;
+	font-style: normal;
+}
+
+
+h1 {
+  margin: 3px 0;
+}
+h2 {
+  margin: 2px 0;
+  margin: 8px 0px 8px 0px;
+  text-align: left;
+}
+h3 {
+  margin: 1px 0;
+  margin: 4px;
+  text-align: center;
+}
+
+ol#comments li p {
+	font-size: 100%;
+}
+
+
+/* classes used by the_meta() */
+ul.post-meta {
+	list-style: none;
+}
+
+ul.post-meta span.post-meta-key {
+	font-weight: bold;
+}
+
+.credit {
+	background: #90a090;
+	border-top: double 3px #aba;
+	color: #fff;
+	font-size: 11px;
+	margin: 10px 0 0 0;
+	padding: 3px;
+	text-align: center;
+}
+
+.credit a:link, .credit a:hover {
+	color: #fff;
+}
+
+.meta, .feedback {
+  font-size: .75em;
+}
+
+.meta li, ul.post-meta li {
+	display: inline;
+}
+
+.meta ul {
+	display: inline;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.meta, .meta a, .feedback {
+	color: #808080;
+	font-weight: normal;
+	letter-spacing: 0;
+}
+
+.post {
+  margin: 10px 0 0 0;
+}
+
+.post p {
+  margin: 0 0 12px 0;
+}
+
+.storytitle {
+  margin: 0;
+  font-weight: bold;
+}
+
+.storytitle a {
+  color: #111;
+}
+
+#commentform #name, #commentform #email, #commentform #url, #commentform textarea, #commentform #author {
+	background: #fff;
+	border: 1px solid #333;
+	padding: .2em;
+}
+
+#commentform textarea {
+	width: 96%;
+}
+
+#commentlist li ul {
+	border-left: 1px solid #ddd;
+	font-size: 110%;
+	list-style-type: none;
+}
+
+#commentlist p {
+  margin: 0;
+}
+
+#header {
+	background: #90a090;
+	border-bottom: double 3px #aba;
+	border-left: solid 1px #9a9;
+	border-right: solid 1px #565;
+	border-top: solid 1px #9a9;
+	font: italic normal 230% 'Times New Roman', Times, serif;
+	letter-spacing: 0.2em;
+	margin: 0;
+	padding: 15px 10px 15px 60px;
+}
+
+#header a {
+	color: #fff;
+	text-decoration: none;
+}
+
+#header a:hover {
+	text-decoration: underline;
+}
+
+textarea {
+  font-family: Arial, helvetica, sans-serif;
+  font-size: 1em;  
+  word-wrap: break-word;
+}
+
+div.tnote {
+  font-family: Arial, helvetica, sans-serif;
+  font-size: 1em;
+  border: 3px #000 solid;
+  padding: 4px;
+  background: #ffff60;
+  word-wrap: break-word;
+}

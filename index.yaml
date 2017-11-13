@@ -1,0 +1,13 @@
+indexes:
+
+- kind: Workspace
+  properties:
+  - name: name
+  - name: time
+    direction: desc
+
+- kind: Notes
+  properties:
+  - name: workspaceKey
+  - name: time
+    direction: desc
