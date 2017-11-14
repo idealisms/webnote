@@ -13,7 +13,7 @@ class GetDatesHandler(webapp2.RequestHandler):
       offset = self.request.get('offset', '0')
       if not name:
           return
-      workspace = models.Workspace.query(models.Workspace.name==name).get()
+      workspace = models.Workspace.get_by_wsName(name)
       if not workspace:
           return
 

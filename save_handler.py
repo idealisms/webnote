@@ -30,16 +30,12 @@ class SaveHandler(webapp2.RequestHandler):
             note['text'] = node.firstChild.nodeValue.strip()
             notesJsonArray.append(note)
 
-        #@ndb.transactional
         def txn():
             nowtime = datetime.datetime.now().replace(microsecond=0)
-            workspace = models.Workspace.query(
-                models.Workspace.name==wsName).get()
+            workspace = models.Workspace.get_by_wsName(wsName)
             if not workspace:
-                workspace = models.Workspace(
-                    name=wsName,
-                    nextNoteNum=nextNoteNum,
-                    time=nowtime)
+                workspace = models.Workspace.create(
+                    wsName, nextNoteNum, nowtime)
                 workspace.put()
 
             workspace.time = nowtime
@@ -50,7 +46,7 @@ class SaveHandler(webapp2.RequestHandler):
                 time=nowtime,
                 notesJsonArray=notesJsonArray)
             notes.put()
-        #ndb.transaction(txn, xg=True)
+        ndb.transaction(txn, xg=True)
         txn()
 
         origin = self.request.headers.get('Origin', '')

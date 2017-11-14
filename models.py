@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 
 import pytz
 from google.appengine.ext import ndb
@@ -6,9 +7,21 @@ from google.appengine.ext import ndb
 TIMEZONE = pytz.timezone('US/Eastern')
 
 class Workspace(ndb.Model):
-    name = ndb.StringProperty(required=True)
+    name = ndb.StringProperty()
     nextNoteNum = ndb.IntegerProperty(required=True)
     time = ndb.DateTimeProperty(required=True)
+
+    @staticmethod
+    def get_by_wsName(wsName):
+        key_id = hashlib.sha1(wsName).hexdigest()
+        return Workspace.get_by_id(key_id)
+
+    @staticmethod
+    def create(wsName, nextNoteNum, time):
+        key_id = hashlib.sha1(wsName).hexdigest()
+
+        return Workspace(id=key_id, name=wsName, nextNoteNum=nextNoteNum,
+                         time=time)
 
     def localtime_str(self):
         local_datetime = pytz.utc.localize(self.time).astimezone(TIMEZONE)

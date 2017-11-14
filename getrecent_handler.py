@@ -12,7 +12,7 @@ class GetRecentHandler(webapp2.RequestHandler):
       name = self.request.get('name', '')
       if not name:
           return
-      workspace = models.Workspace.query(models.Workspace.name==name).get()
+      workspace = models.Workspace.get_by_wsName(name)
       if not workspace:
           return
       self.response.write(workspace.localtime_str())

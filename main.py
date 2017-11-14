@@ -63,8 +63,7 @@ class LoadHandler(webapp2.RequestHandler):
         notes = []
         logging.info(name)
 
-        workspace = models.Workspace.query(models.Workspace.name==name).order(
-            -models.Workspace.time).get()
+        workspace = models.Workspace.get_by_wsName(name)
         if workspace:
             nextNoteNum = workspace.nextNoteNum
             lasttime = workspace.localtime_str()
