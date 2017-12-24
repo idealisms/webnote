@@ -1727,10 +1727,6 @@ var workspace =
     xmlhttp.open('POST', 'save.py', true);
     var savePayload = workspace.toString();
     xmlhttp.send(savePayload);
-
-    var xmlhttp2 = getxmlreqobj();
-    xmlhttp2.open('POST', 'http://webnote-184120.appspot.com/webnote/save.py', true);
-    xmlhttp2.send(savePayload);
   },
   saveCallback : function(xmlhttp) {
     var doc = xmlhttp.responseXML;
