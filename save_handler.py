@@ -1,7 +1,9 @@
 import datetime
 import logging
+import time
 from xml.dom.minidom import *
 
+from google.appengine.ext import db
 from google.appengine.ext import ndb
 import webapp2
 
@@ -46,8 +48,12 @@ class SaveHandler(webapp2.RequestHandler):
                 time=nowtime,
                 notesJsonArray=notesJsonArray)
             notes.put()
-        ndb.transaction(txn, xg=True)
-        txn()
+        for i in range(5):
+            try:
+                ndb.transaction(txn, xg=True)
+                break
+            except db.TransactionFailedError:
+                time.sleep(1.1)
 
         origin = self.request.headers.get('Origin', '')
         logging.info(origin)
