@@ -28,9 +28,9 @@ import getrecent_handler
 import save_handler
 
 JINJA_ENVIRONMENT = jinja2.Environment(
-		loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
-		extensions=['jinja2.ext.autoescape'],
-		autoescape=False)
+    loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
+    extensions=['jinja2.ext.autoescape'],
+    autoescape=False)
 
 DEBUG = 0
 HELPEMAIL = 'webnote@ponderer.org'
@@ -49,6 +49,8 @@ ga('send', 'pageview');
 
 
 class LoadHandler(webapp2.RequestHandler):
+    """Handler for loading a workspace."""
+
     def get(self, **kwargs):
         name = kwargs.get('name')
         if name:
@@ -58,31 +60,31 @@ class LoadHandler(webapp2.RequestHandler):
         if not name:
             raise Exception()
 
-        nextNoteNum = 0
+        next_note_num = 0
         lasttime = ''
         notes = []
         logging.info(name)
 
         workspace = models.Workspace.get_by_wsName(name)
         if workspace:
-            nextNoteNum = workspace.nextNoteNum
+            next_note_num = workspace.nextNoteNum
             lasttime = workspace.localtime_str()
 
             dt = workspace.time
-            loadTime = self.request.get('time')
-            if loadTime:
+            load_time = self.request.get('time')
+            if load_time:
                 try:
-                    dt = datetime.datetime.strptime(loadTime, '%Y-%m-%d %H:%M:%S')
+                    dt = datetime.datetime.strptime(load_time, '%Y-%m-%d %H:%M:%S')
                     dt = models.TIMEZONE.localize(dt).astimezone(pytz.utc)
                 except ValueError:
                     pass
             
-            notesEntity = models.Notes.query(
+            notes_entity = models.Notes.query(
             		models.Notes.workspaceKey==workspace.key and
             		models.Notes.time==dt).get()
 
-            if notesEntity:
-                notes = notesEntity.notesJsonArray
+            if notes_entity:
+                notes = notes_entity.notesJsonArray
 
                 
         template_values = {
@@ -91,7 +93,7 @@ class LoadHandler(webapp2.RequestHandler):
             'lasttime': lasttime,
             'HELPEMAIL': HELPEMAIL,
             'NUM_DATES': NUM_DATES,
-            'nextNoteNum': nextNoteNum,
+            'nextNoteNum': next_note_num,
             'newNoteText': '',  # TODO
             'CUSTOMHEADER': CUSTOMHEADER,
             'notes': json.dumps(notes),
