@@ -12,15 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import unittest
 import webtest
 
 import main
 
+class MainTest(unittest.TestCase):
 
-def test_get():
-    app = webtest.TestApp(main.app)
+    def testGet(self):
+        app = webtest.TestApp(main.app)
 
-    response = app.get('/')
-
-    assert response.status_int == 200
-    assert response.body == 'Hello, World!'
+        response = app.get('/')
+        self.assertEqual(301, response.status_int)
+        self.assertEqual('http://localhost/webnote/', response.headers.get('Location'))

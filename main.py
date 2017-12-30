@@ -18,14 +18,15 @@ import logging
 import os
 import urllib
 
-import jinja2
 import pytz
+import jinja2
 import webapp2
 
 import models
 import getdates_handler
 import getrecent_handler
 import save_handler
+import string_handler
 
 JINJA_ENVIRONMENT = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
@@ -102,29 +103,12 @@ class LoadHandler(webapp2.RequestHandler):
         self.response.write(template.render(template_values))
 
 
-class StringHandler(webapp2.RequestHandler):
-
-    CACHE = {}
-
-    def get(self):
-        self.response.headers['Content-Type'] = 'text/javascript'
-
-        lang = 'en'
-
-        if lang not in self.CACHE:
-            path = os.path.join(os.path.split(__file__)[0], 'strings.js.' + lang)
-            with open(path) as f:
-                self.CACHE[lang] = f.read()
-
-        self.response.write(self.CACHE[lang])
-
-
 app = webapp2.WSGIApplication([
     webapp2.Route('/', webapp2.RedirectHandler, defaults={'_uri': '/webnote/'}),
     webapp2.Route('/webnote', webapp2.RedirectHandler, defaults={'_uri': '/webnote/'}),
     webapp2.Route('/webnote/index.html', webapp2.RedirectHandler, defaults={'_uri': '/webnote/'}),
 
-    webapp2.Route(r'/webnote/strings.js', handler=StringHandler),
+    webapp2.Route(r'/webnote/strings.js', handler=string_handler.StringHandler),
     webapp2.Route(r'/webnote/save.py', handler=save_handler.SaveHandler),
     webapp2.Route(r'/webnote/getrecent.py', handler=getrecent_handler.GetRecentHandler),
     webapp2.Route(r'/webnote/getdates.py', handler=getdates_handler.GetDatesHandler),
