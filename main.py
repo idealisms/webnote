@@ -12,95 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import datetime
-import json
-import logging
-import os
-import urllib
-
-import pytz
-import jinja2
 import webapp2
 
-import models
+import constants
 import getdates_handler
 import getrecent_handler
+import load_handler
 import save_handler
 import string_handler
-
-JINJA_ENVIRONMENT = jinja2.Environment(
-    loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
-    extensions=['jinja2.ext.autoescape'],
-    autoescape=False)
-
-DEBUG = 0
-HELPEMAIL = 'webnote@ponderer.org'
-NUM_DATES = 10
-CUSTOMHEADER = """
-<script>
-(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
-(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
-m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
-})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-
-ga('create', 'UA-105084-2', 'auto');
-ga('send', 'pageview');
-</script>
-"""
-
-
-class LoadHandler(webapp2.RequestHandler):
-    """Handler for loading a workspace."""
-
-    def get(self, **kwargs):
-        name = kwargs.get('name')
-        if name:
-            name = urllib.unquote(name)
-        else:
-            name = self.request.get('name')
-        if not name:
-            raise Exception()
-
-        next_note_num = 0
-        lasttime = ''
-        notes = []
-        logging.info(name)
-
-        workspace = models.Workspace.get_by_wsName(name)
-        if workspace:
-            next_note_num = workspace.nextNoteNum
-            lasttime = workspace.localtime_str()
-
-            dt = workspace.time
-            load_time = self.request.get('time')
-            if load_time:
-                try:
-                    dt = datetime.datetime.strptime(load_time, '%Y-%m-%d %H:%M:%S')
-                    dt = models.TIMEZONE.localize(dt).astimezone(pytz.utc)
-                except ValueError:
-                    pass
-            
-            notes_entity = models.Notes.query(
-            		models.Notes.workspaceKey==workspace.key and
-            		models.Notes.time==dt).get()
-
-            if notes_entity:
-                notes = notes_entity.notesJsonArray
-
-                
-        template_values = {
-            'debugOn': DEBUG,
-            'name': name,
-            'lasttime': lasttime,
-            'HELPEMAIL': HELPEMAIL,
-            'NUM_DATES': NUM_DATES,
-            'nextNoteNum': next_note_num,
-            'newNoteText': '',  # TODO
-            'CUSTOMHEADER': CUSTOMHEADER,
-            'notes': json.dumps(notes),
-        }
-        template = JINJA_ENVIRONMENT.get_template('templates/workspace.html')
-        self.response.write(template.render(template_values))
 
 
 app = webapp2.WSGIApplication([
@@ -112,6 +31,6 @@ app = webapp2.WSGIApplication([
     webapp2.Route(r'/webnote/save.py', handler=save_handler.SaveHandler),
     webapp2.Route(r'/webnote/getrecent.py', handler=getrecent_handler.GetRecentHandler),
     webapp2.Route(r'/webnote/getdates.py', handler=getdates_handler.GetDatesHandler),
-    webapp2.Route(r'/webnote/load.py', handler=LoadHandler),
-    webapp2.Route(r'/webnote/<name:.+>', handler=LoadHandler),
-], debug=DEBUG)
+    webapp2.Route(r'/webnote/load.py', handler=load_handler.LoadHandler),
+    webapp2.Route(r'/webnote/<name:.+>', handler=load_handler.LoadHandler),
+], debug=constants.DEBUG)
