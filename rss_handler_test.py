@@ -55,3 +55,6 @@ class RssHandlerTest(unittest.TestCase):
         self.assertIn('<link>http://localhost/webnote/tc%252520testing</link>', response.body)
         self.assertIn('<lastBuildDate>Sun, 31 Dec 2017 00:00:00 GMT</lastBuildDate>', response.body)
         self.assertIn('http://localhost/webnote/tc%252520testing#note2', response.body)
+        self.assertIn('This is note 0.', response.body)
+        self.assertIn('blah blah', response.body)
+        

@@ -22,8 +22,8 @@ class RssHandler(load_handler.LoadHandler):
         entries = []
         for note in notes:
             entries.append(PyRSS2Gen.RSSItem(
-                title=note.get('text', '').split('\n')[0][:60],
-                description=note.get('text', ''),
+                title=urllib.unquote(note.get('text', '')).strip().split('\n')[0][:60],
+                description=urllib.unquote(note.get('text', '')).strip(),
                 guid=PyRSS2Gen.Guid('%s/webnote/%s#%s' % (
                     self.request.host_url,
                     urllib.quote(urllib.quote(workspace.name)),
