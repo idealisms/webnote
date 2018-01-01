@@ -6,7 +6,6 @@ from google.appengine.ext import ndb
 from google.appengine.ext import testbed
 
 import main
-import load_handler
 
 class LoadHandlerTest(unittest.TestCase):
 

@@ -33,7 +33,7 @@ ga('send', 'pageview');
 class LoadHandler(webapp2.RequestHandler):
     """Handler for loading a workspace."""
 
-    def get(self, **kwargs):
+    def get_workspace_name(self, kwargs):
         name = kwargs.get('name')
         if name:
             name = urllib.unquote(name)
@@ -42,31 +42,22 @@ class LoadHandler(webapp2.RequestHandler):
         if not name:
             raise Exception()
 
+        logging.info(name)
+        return name
+
+    def get(self, **kwargs):
+        name = self.get_workspace_name(kwargs)
+
         next_note_num = 0
         lasttime = ''
         notes = []
-        logging.info(name)
 
         workspace = models.Workspace.get_by_wsName(name)
         if workspace:
             next_note_num = workspace.nextNoteNum
             lasttime = workspace.localtime_str()
 
-            dt = workspace.time
-            load_time = self.request.get('time')
-            if load_time:
-                try:
-                    dt = datetime.datetime.strptime(load_time, '%Y-%m-%d %H:%M:%S')
-                    dt = models.TIMEZONE.localize(dt).astimezone(pytz.utc)
-                except ValueError:
-                    pass
-  
-            notes_entity = models.Notes.query(
-            		models.Notes.workspaceKey == workspace.key and
-            		models.Notes.time == dt).get()
-
-            if notes_entity:
-                notes = notes_entity.notesJsonArray
+            notes = workspace.get_notes_list(self.request)
 
 
         template_values = {

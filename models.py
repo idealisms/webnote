@@ -27,6 +27,26 @@ class Workspace(ndb.Model):
         local_datetime = pytz.utc.localize(self.time).astimezone(TIMEZONE)
         return local_datetime.strftime('%Y-%m-%d %H:%M:%S')
 
+    def get_notes_list(self, request):
+        dt = self.time
+        load_time = request and request.get('time')
+        if load_time:
+            try:
+                dt = datetime.datetime.strptime(load_time, '%Y-%m-%d %H:%M:%S')
+                dt = TIMEZONE.localize(dt).astimezone(pytz.utc)
+            except ValueError:
+                pass
+
+        notes_entity = Notes.query(
+                Notes.workspaceKey == self.key and
+                Notes.time == dt).get()
+
+        if notes_entity:
+            return notes_entity.notesJsonArray
+        return []
+    
+
+
 
 class Notes(ndb.Model):
 

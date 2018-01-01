@@ -18,6 +18,7 @@ import constants
 import getdates_handler
 import getrecent_handler
 import load_handler
+import rss_handler
 import save_handler
 import string_handler
 
@@ -31,6 +32,8 @@ app = webapp2.WSGIApplication([
     webapp2.Route(r'/webnote/save.py', handler=save_handler.SaveHandler),
     webapp2.Route(r'/webnote/getrecent.py', handler=getrecent_handler.GetRecentHandler),
     webapp2.Route(r'/webnote/getdates.py', handler=getdates_handler.GetDatesHandler),
+    webapp2.Route(r'/webnote/rss.py', handler=rss_handler.RssHandler),
     webapp2.Route(r'/webnote/load.py', handler=load_handler.LoadHandler),
+    webapp2.Route(r'/webnote/<name:.+>.xml', handler=rss_handler.RssHandler),
     webapp2.Route(r'/webnote/<name:.+>', handler=load_handler.LoadHandler),
 ], debug=constants.DEBUG)
