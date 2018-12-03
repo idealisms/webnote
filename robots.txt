@@ -1,0 +1,11 @@
+User-agent: *
+Crawl-delay: 30
+
+User-agent: tailrank
+Disallow: /
+
+User-agent: Tailrank
+Disallow: /
+
+User-agent: Spinn3r
+Disallow: /

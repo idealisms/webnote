@@ -13,6 +13,9 @@ handlers:
   static_files: index.html
   upload: index.html
 
+- url: /robots\.txt
+  static_files: robots.txt
+  upload: robots\.txt
 - url: /webnote/FAQ\.html
   static_files: FAQ.html
   upload: FAQ\.html
@@ -37,6 +40,9 @@ handlers:
 - url: /webnote/images
   static_dir: images
 
+- url: /admin/.*
+  script: google.appengine.ext.admin.application
+  login: admin
 
 - url: /.*
   script: main.app
