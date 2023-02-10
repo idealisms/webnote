@@ -1,0 +1,12 @@
+*~
+*.pyc
+*.pyo
+*.egg-info
+*.sh
+*.cmd
+*.yaml
+**/RCS/
+.*
+env/
+*_test.py
+run_tests.py

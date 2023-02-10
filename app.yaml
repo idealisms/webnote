@@ -1,15 +1,12 @@
-runtime: python27
-api_version: 1
-threadsafe: true
+runtime: python39
 
 automatic_scaling:
   max_instances: 2
 
-libraries:
-- name: jinja2
-  version: latest
-- name: pytz
-  version: latest
+app_engine_apis: true
+
+env_variables:
+  NDB_USE_CROSS_COMPATIBLE_PICKLE_PROTOCOL: 'True'
 
 handlers:
 - url: /webnote/
@@ -49,14 +46,3 @@ handlers:
 
 - url: /.*
   script: main.app
-
-skip_files:
-- ^(.*/)?#.*#$
-- ^(.*/)?.*~$
-- ^(.*/)?.*\.py[co]$
-- ^(.*/)?.*\.egg-info$
-- ^(.*/)?.*/RCS/.*$
-- ^(.*/)?\..*$
-- ^env/.*$
-- ^(.*/)?.*_test\.py$
-- ^run_tests\.py$
