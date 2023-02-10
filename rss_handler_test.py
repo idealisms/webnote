@@ -35,7 +35,7 @@ class RssHandlerTest(unittest.TestCase):
         app.get('/webnote/notfound.xml', status=404)
 
         ws_key = models.Workspace(
-            id=hashlib.sha1('tc%20testing').hexdigest(),
+            id=hashlib.sha1('tc%20testing'.encode('ascii')).hexdigest(),
             name='tc%20testing',
             nextNoteNum=3,
             time=datetime.datetime(2017, 12, 31)

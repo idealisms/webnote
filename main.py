@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import google.appengine.api
 import webapp2
 
 import constants
@@ -37,3 +38,5 @@ app = webapp2.WSGIApplication([
     webapp2.Route(r'/webnote/<name:.+>.xml', handler=rss_handler.RssHandler),
     webapp2.Route(r'/webnote/<name:.+>', handler=load_handler.LoadHandler),
 ], debug=constants.DEBUG)
+
+app = google.appengine.api.wrap_wsgi_app(app)

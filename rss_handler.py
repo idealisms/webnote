@@ -1,5 +1,4 @@
-import os
-import urllib
+import urllib.parse
 import webapp2
 
 from lib import PyRSS2Gen
@@ -22,11 +21,11 @@ class RssHandler(load_handler.LoadHandler):
         entries = []
         for note in notes:
             entries.append(PyRSS2Gen.RSSItem(
-                title=urllib.unquote(note.get('text', '')).strip().split('\n')[0][:60],
-                description=urllib.unquote(note.get('text', '')).strip(),
+                title=urllib.parse.unquote(note.get('text', '')).strip().split('\n')[0][:60],
+                description=urllib.parse.unquote(note.get('text', '')).strip(),
                 guid=PyRSS2Gen.Guid('%s/webnote/%s#%s' % (
                     self.request.host_url,
-                    urllib.quote(urllib.quote(workspace.name)),
+                    urllib.parse.quote(urllib.parse.quote(workspace.name)),
                     note.get('id', ''),
                 ))))
 
@@ -34,11 +33,11 @@ class RssHandler(load_handler.LoadHandler):
         entries.reverse()
 
         rss = PyRSS2Gen.RSS2(
-                title = urllib.unquote(workspace.name),
+                title = urllib.parse.unquote(workspace.name),
                 description = 'Webnote RSS feed',
                 link = '%s/webnote/%s' % (
                     self.request.host_url,
-                    urllib.quote(urllib.quote(workspace.name))),
+                    urllib.parse.quote(urllib.parse.quote(workspace.name))),
                 lastBuildDate = workspace.time,
                 items = entries)
 

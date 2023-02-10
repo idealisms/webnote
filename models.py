@@ -13,12 +13,12 @@ class Workspace(ndb.Model):
 
     @staticmethod
     def get_by_wsName(wsName):
-        key_id = hashlib.sha1(wsName).hexdigest()
+        key_id = hashlib.sha1(wsName.encode('ascii')).hexdigest()
         return Workspace.get_by_id(key_id)
 
     @staticmethod
     def create(wsName, nextNoteNum, time):
-        key_id = hashlib.sha1(wsName).hexdigest()
+        key_id = hashlib.sha1(wsName.encode('ascii')).hexdigest()
 
         return Workspace(id=key_id, name=wsName, nextNoteNum=nextNoteNum,
                          time=time)

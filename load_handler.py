@@ -1,10 +1,8 @@
-import datetime
 import json
 import logging
 import os
-import urllib
+import urllib.parse
 
-import pytz
 import jinja2
 import webapp2
 
@@ -13,7 +11,6 @@ import models
 
 JINJA_ENVIRONMENT = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
-    extensions=['jinja2.ext.autoescape'],
     autoescape=False)
 
 HELPEMAIL = 'webnote@ponderer.org'
@@ -36,7 +33,7 @@ class LoadHandler(webapp2.RequestHandler):
     def get_workspace_name(self, kwargs):
         name = kwargs.get('name')
         if name:
-            name = urllib.unquote(name)
+            name = urllib.parse.unquote(name)
         else:
             name = self.request.get('name')
         if not name:
