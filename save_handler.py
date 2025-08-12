@@ -46,7 +46,8 @@ class SaveHandler(webapp2.RequestHandler):
             notes = models.Notes(
                 workspaceKey=workspace.key,
                 time=nowtime,
-                notesJsonArray=notesJsonArray)
+                notesJsonArray=notesJsonArray,
+                time_to_delete=nowtime + datetime.timedelta(days=365*2))
             notes.put()
         for i in range(5):
             try:

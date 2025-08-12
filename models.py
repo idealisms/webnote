@@ -59,6 +59,7 @@ class Notes(ndb.Model):
     workspaceKey = ndb.KeyProperty(kind='Workspace', required=True)
     time = ndb.DateTimeProperty(required=True)
     notesJsonArray = ndb.JsonProperty(compressed=True, required=True)
+    time_to_delete = ndb.DateTimeProperty()
 
     def localtime_str(self):
         local_datetime = pytz.utc.localize(self.time).astimezone(TIMEZONE)
