@@ -1,5 +1,8 @@
 import datetime
 import hashlib
+import json
+import logging
+import zlib
 
 import pytz
 from google.appengine.ext import ndb
@@ -41,11 +44,25 @@ class Workspace(ndb.Model):
                 Notes.workspaceKey == self.key and
                 Notes.time == dt).get()
 
+        ret = []
         if notes_entity:
-            return notes_entity.notesJsonArray
-        return []
-    
+            try:
+                v = notes_entity._values[b'notesJsonArray']
+                # logging.error(v)
+                # logging.error(v.b_val)
+                b = zlib.decompress(v.b_val)
+                # logging.error(b)
+                ret = json.loads(b.decode('utf8'))
+                return ret
+            except Exception as e:
+                logging.error('step failed')
 
+            try:
+                ret = notes_entity.notesJsonArray
+            except UnicodeDecodeError:
+                pass
+
+        return ret
 
 
 class Notes(ndb.Model):
