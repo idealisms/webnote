@@ -1,3 +1,4 @@
 *.pyc
 env
 .vscode
+NOTES.md
