@@ -1,5 +1,4 @@
 import urllib.parse
-import webapp2
 
 from lib import PyRSS2Gen
 import load_handler

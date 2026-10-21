@@ -1,7 +1,7 @@
 import datetime
 import logging
 import time
-from xml.dom.minidom import *
+from xml.dom.minidom import parseString
 
 from google.appengine.ext import db
 from google.appengine.ext import ndb
@@ -33,7 +33,8 @@ class SaveHandler(webapp2.RequestHandler):
             notesJsonArray.append(note)
 
         def txn():
-            nowtime = datetime.datetime.now().replace(microsecond=0)
+            nowtime = datetime.datetime.now(datetime.timezone.utc).replace(
+                tzinfo=None, microsecond=0)
             workspace = models.Workspace.get_by_wsName(wsName)
             if not workspace:
                 workspace = models.Workspace.create(

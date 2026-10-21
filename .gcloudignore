@@ -9,4 +9,3 @@
 .*
 env/
 *_test.py
-run_tests.py
