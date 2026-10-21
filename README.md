@@ -4,9 +4,16 @@ Live at https://test.aypwip.org/webnote/ .
 ## Install notes
 
 * Install [gcloud](https://cloud.google.com/sdk/docs/install)
-* Set up environment
+* Set up environment with Python 3.11 (matches the `python311` runtime in
+  app.yaml). On Ubuntu 24.04, install it with
+  [uv](https://docs.astral.sh/uv/): `uv python install 3.11`
 ```sh
-python3 -m venv env
+$(uv python find 3.11) -m venv env
 source env/bin/activate
-pip install -r requirements.txt```
+pip install -r requirements-dev.txt
+```
+* Run tests
+```sh
+python -m unittest *_test.py
+```
 * 

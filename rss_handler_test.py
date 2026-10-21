@@ -1,5 +1,6 @@
 import datetime
 import hashlib
+import os
 import unittest
 import webtest
 
@@ -30,7 +31,10 @@ class RssHandlerTest(unittest.TestCase):
         self.testbed.deactivate()
 
     def testRss(self):
-        app = webtest.TestApp(main.app)
+        # main.app snapshots os.environ at import time, before the testbed
+        # sets APPLICATION_ID, so pass it through the WSGI environ.
+        app = webtest.TestApp(main.app, extra_environ={
+            'APPLICATION_ID': os.environ['APPLICATION_ID']})
 
         app.get('/webnote/notfound.xml', status=404)
 

@@ -1,0 +1,3 @@
+-r requirements.txt
+rsa==4.9.1
+WebTest==3.0.7
