@@ -46,21 +46,21 @@ class Workspace(ndb.Model):
 
         ret = []
         if notes_entity:
-            try:
-                v = notes_entity._values[b'notesJsonArray']
-                # logging.error(v)
-                # logging.error(v.b_val)
-                b = zlib.decompress(v.b_val)
-                # logging.error(b)
-                ret = json.loads(b.decode('utf8'))
-                return ret
-            except Exception as e:
-                logging.error('step failed')
+            # Legacy entities store notesJsonArray as a plain zlib blob that
+            # the ndb property can't decode, so it loads as raw bytes. Entities
+            # written by ndb load as a _CompressedValue and use the property.
+            v = notes_entity._values.get(b'notesJsonArray')
+            raw = getattr(v, 'b_val', None)
+            if isinstance(raw, bytes):
+                try:
+                    return json.loads(zlib.decompress(raw).decode('utf8'))
+                except (zlib.error, ValueError):
+                    logging.exception('Failed to decode legacy notesJsonArray')
 
             try:
                 ret = notes_entity.notesJsonArray
             except UnicodeDecodeError:
-                pass
+                logging.exception('Failed to decode notesJsonArray')
 
         return ret
 
