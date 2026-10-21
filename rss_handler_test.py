@@ -4,7 +4,6 @@ import os
 import unittest
 import webtest
 
-from google.appengine.api import memcache
 from google.appengine.ext import ndb
 from google.appengine.ext import testbed
 
@@ -19,7 +18,10 @@ class RssHandlerTest(unittest.TestCase):
         # Then activate the testbed, which prepares the service stubs for use.
         self.testbed.activate()
         # Next, declare which service stubs you want to use.
-        self.testbed.init_datastore_v3_stub()
+        # Fail queries that need an index missing from index.yaml.
+        self.testbed.init_datastore_v3_stub(
+            require_indexes=True,
+            root_path=os.path.dirname(os.path.abspath(__file__)))
         self.testbed.init_memcache_stub()
         # Clear ndb's in-context cache between tests.
         # This prevents data from leaking between tests.

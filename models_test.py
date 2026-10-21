@@ -1,6 +1,7 @@
 import datetime
 import hashlib
 import json
+import os
 import unittest
 import zlib
 
@@ -25,7 +26,10 @@ class ModelsTest(unittest.TestCase):
     def setUp(self):
         self.testbed = testbed.Testbed()
         self.testbed.activate()
-        self.testbed.init_datastore_v3_stub()
+        # Fail queries that need an index missing from index.yaml.
+        self.testbed.init_datastore_v3_stub(
+            require_indexes=True,
+            root_path=os.path.dirname(os.path.abspath(__file__)))
         self.testbed.init_memcache_stub()
         ndb.get_context().clear_cache()
 
