@@ -51,10 +51,10 @@ class RssHandlerTest(unittest.TestCase):
         ).put()
 
         response = app.get('/webnote/tc%252520testing.xml', status=200)
-        self.assertIn('<channel><title>tc testing</title>', response.body)
-        self.assertIn('<link>http://localhost/webnote/tc%252520testing</link>', response.body)
-        self.assertIn('<lastBuildDate>Sun, 31 Dec 2017 00:00:00 GMT</lastBuildDate>', response.body)
-        self.assertIn('http://localhost/webnote/tc%252520testing#note2', response.body)
-        self.assertIn('This is note 0.', response.body)
-        self.assertIn('blah blah', response.body)
+        self.assertIn('<channel><title>tc testing</title>', response.text)
+        self.assertIn('<link>http://localhost/webnote/tc%252520testing</link>', response.text)
+        self.assertIn('<lastBuildDate>Sun, 31 Dec 2017 00:00:00 GMT</lastBuildDate>', response.text)
+        self.assertIn('http://localhost/webnote/tc%252520testing#note2', response.text)
+        self.assertIn('This is note 0.', response.text)
+        self.assertIn('blah blah', response.text)
         

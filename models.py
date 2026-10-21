@@ -41,7 +41,7 @@ class Workspace(ndb.Model):
                 pass
 
         notes_entity = Notes.query(
-                Notes.workspaceKey == self.key and
+                Notes.workspaceKey == self.key,
                 Notes.time == dt).get()
 
         ret = []
