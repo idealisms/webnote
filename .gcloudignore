@@ -12,3 +12,4 @@ env/
 *.md
 smoketest.py
 migrations/
+difftest.py

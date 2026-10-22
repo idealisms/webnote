@@ -30,3 +30,13 @@ coverage run --source=. --omit='env/*,*_test.py,dataflow/*,migrations/*,lib/*,sm
   version and smoke-tests the live site. Otherwise the new version is left
   without traffic. The script refuses to deploy uncommitted changes unless
   `ALLOW_DIRTY=1` is set.
+* Compare two deployed versions on real workspaces (read-only), e.g. a new
+  version deployed with `--no-promote` against the live site
+```sh
+python difftest.py https://VERSION-dot-webnote-184120.uc.r.appspot.com \
+    https://test.aypwip.org --names-file NAMES_FILE --sample 200
+```
+  `NAMES_FILE` lists stored workspace names (user data; keep it out of the repo).
+  The script compares getrecent, every getdates page, the workspace page, older
+  revisions loaded by time, and the RSS feed. By default it reports only which
+  fields differ; `--show-values` prints the values, which include note contents.
