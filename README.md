@@ -16,15 +16,15 @@ pip install -r requirements-dev.txt
 ```sh
 python -m unittest *_test.py
 ```
-* Deploy without promoting, smoke-test the new version, then send traffic to it
+* Deploy
 ```sh
-gcloud app deploy app.yaml --project webnote-184120 --no-promote
-python smoketest.py https://VERSION-dot-webnote-184120.uc.r.appspot.com \
-    --compare-with https://test.aypwip.org --workspace SOME_WORKSPACE
-gcloud app services set-traffic default --splits VERSION=1 --project webnote-184120
+./deploy.sh [--workspace NAME ...]
 ```
-  The smoke test waits for the new version's first instance to start, saves two
-  revisions to the `webnote_smoketest` workspace, and checks loading, history and
-  RSS. `--compare-with` compares existing workspaces (read-only) against another
-  version.
-* 
+  This runs the unit tests, deploys a new version without traffic, and runs
+  `smoketest.py` against it. The smoke test waits for the version's first
+  instance, saves two revisions to the `webnote_smoketest` workspace, checks
+  loading, history and RSS, and compares any `--workspace` names (read-only) with
+  the live site. If the smoke test passes, the script sends all traffic to the new
+  version and smoke-tests the live site. Otherwise the new version is left
+  without traffic. The script refuses to deploy uncommitted changes unless
+  `ALLOW_DIRTY=1` is set.
