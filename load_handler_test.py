@@ -61,3 +61,46 @@ class LoadHandlerTest(unittest.TestCase):
     def testNonAsciiNameInUrl(self):
         # Used to fail with UnicodeEncodeError (a 500).
         self.assertIn('var notes = [];', self.get_page('/webnote/Bogot%C3%A1'))
+
+    def testPageValues(self):
+        # 2017-12-31 05:00 UTC is 00:00 EST.
+        time = datetime.datetime(2017, 12, 31, 5)
+        workspace = models.Workspace.create('my%20notes', 7, time)
+        workspace.put()
+        models.Notes(workspaceKey=workspace.key, time=time,
+                     notesJsonArray=[{'id': 'note0', 'text': 'hi'}]).put()
+
+        page = self.get_page('/webnote/my%252520notes')
+        for line in ("debugOn = 0;",
+                     "workspace.setName(unescape('my%20notes'));",
+                     "workspace.loadedTime = '2017-12-31 00:00:00';",
+                     "adminEmail = 'webnote@ponderer.org';",
+                     "numDates = 10;",
+                     'var notes = [{"id": "note0", "text": "hi"}];',
+                     "workspace.nextNoteNum = 7;",
+                     "<title> my%20notes</title>"):
+            self.assertIn(line, page)
+
+    def testNewWorkspacePage(self):
+        page = self.get_page('/webnote/new')
+        for line in ("workspace.loadedTime = '';",
+                     'var notes = [];',
+                     "workspace.nextNoteNum = 0;"):
+            self.assertIn(line, page)
+
+    def testLoadPyNameParam(self):
+        # The snapshot form and the bookmarklet use load.py?name=, with the
+        # stored name escaped once more by the form encoding.
+        workspace = models.Workspace.create(
+            'my%2Dnotes', 1, datetime.datetime(2017, 12, 31))
+        workspace.put()
+        page = self.get_page('/webnote/load.py?name=my%252Dnotes')
+        self.assertIn("workspace.setName(unescape('my%2Dnotes'));", page)
+        self.assertIn("workspace.nextNoteNum = 1;", page)
+
+    def testLoadPyWithoutName(self):
+        # Currently a 500; a 400 or a redirect to /webnote/ would be better.
+        app = webtest.TestApp(main.app, extra_environ={
+            'APPLICATION_ID': os.environ['APPLICATION_ID']})
+        with self.assertLogs(level='ERROR'):
+            app.get('/webnote/load.py', status=500)

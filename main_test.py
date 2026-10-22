@@ -25,3 +25,11 @@ class MainTest(unittest.TestCase):
         response = app.get('/')
         self.assertEqual(301, response.status_int)
         self.assertEqual('http://localhost/webnote/', response.headers.get('Location'))
+
+    def testRedirects(self):
+        app = webtest.TestApp(main.app)
+        for path in ('/', '/webnote', '/webnote/index.html'):
+            response = app.get(path)
+            self.assertEqual(301, response.status_int, path)
+            self.assertEqual('http://localhost/webnote/',
+                             response.headers.get('Location'), path)

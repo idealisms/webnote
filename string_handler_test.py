@@ -1,6 +1,8 @@
+import os
 import unittest
 import webtest
 
+import main
 import string_handler
 
 class StringHandlerTest(unittest.TestCase):
@@ -23,3 +25,15 @@ class StringHandlerTest(unittest.TestCase):
             request.headers['Accept-Language'] = accept_language
             self.assertEqual(
                 expected, string_handler.StringHandler.getLanguage(request))
+
+    def testGet(self):
+        app = webtest.TestApp(main.app)
+        here = os.path.dirname(os.path.abspath(__file__))
+        for accept_language, lang in (('de-DE,de;q=0.9', 'de'),
+                                      ('en-US', 'en'),
+                                      ('fr', 'en')):
+            response = app.get('/webnote/strings.js',
+                               headers={'Accept-Language': accept_language})
+            self.assertEqual('text/javascript', response.content_type)
+            with open(os.path.join(here, 'strings.js.' + lang)) as f:
+                self.assertEqual(f.read(), response.text)

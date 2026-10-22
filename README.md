@@ -12,9 +12,11 @@ $(uv python find 3.11) -m venv env
 source env/bin/activate
 pip install -r requirements-dev.txt
 ```
-* Run tests
+* Run tests, optionally with a coverage report
 ```sh
 python -m unittest *_test.py
+coverage run --source=. --omit='env/*,*_test.py,dataflow/*,migrations/*,lib/*,smoketest.py' \
+    -m unittest *_test.py && coverage report -m
 ```
 * Deploy
 ```sh

@@ -205,6 +205,39 @@ class ModelsTest(unittest.TestCase):
         self.assertIn('notesJsonArray', entity.unindexed_properties())
         self.assertEqual(notes, json.loads(zlib.decompress(raw).decode('utf8')))
 
+    def put_legacy_notes(self, workspace, time, blob):
+        entity = datastore.Entity('Notes')
+        entity['workspaceKey'] = workspace.key.to_old_key()
+        entity['time'] = time
+        entity['notesJsonArray'] = datastore_types.Blob(blob)
+        datastore.Put(entity)
+
+    def testGetNotesListUncompressedLegacyBlob(self):
+        # A plain (uncompressed) JSON blob: the zlib path fails and logs, then
+        # the property accessor reads it.
+        time = datetime.datetime(2017, 12, 31)
+        workspace = self.put_workspace('ws', time)
+        self.put_legacy_notes(workspace, time, b'[{"id": "note0"}]')
+        with self.assertLogs(level='ERROR'):
+            self.assertEqual([{'id': 'note0'}], workspace.get_notes_list(None))
+
+    def testGetNotesListUndecodableBlob(self):
+        # Invalid UTF-8 is logged and treated as no notes.
+        time = datetime.datetime(2017, 12, 31)
+        workspace = self.put_workspace('ws', time)
+        self.put_legacy_notes(workspace, time, b'\x80 not notes')
+        with self.assertLogs(level='ERROR'):
+            self.assertEqual([], workspace.get_notes_list(None))
+
+    def testGetNotesListNonJsonBlob(self):
+        # Valid UTF-8 that isn't JSON raises, so the page returns a 500.
+        time = datetime.datetime(2017, 12, 31)
+        workspace = self.put_workspace('ws', time)
+        self.put_legacy_notes(workspace, time, b'not notes')
+        with self.assertLogs(level='ERROR'):
+            with self.assertRaises(ValueError):
+                workspace.get_notes_list(None)
+
 
 class CanonicalWsNameTest(unittest.TestCase):
     """Documents how stored workspace names are normalized.
