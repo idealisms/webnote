@@ -40,3 +40,14 @@ python difftest.py https://VERSION-dot-webnote-184120.uc.r.appspot.com \
   The script compares getrecent, every getdates page, the workspace page, older
   revisions loaded by time, and the RSS feed. By default it reports only which
   fields differ; `--show-values` prints the values, which include note contents.
+* Check the name and notes handling against real data (read-only downloads; the
+  output is user data, so it goes in `.data/`, which is kept out of git and deploys)
+```sh
+TOKEN=$(gcloud auth print-access-token) python tools/dump_workspaces.py .data/workspaces.jsonl
+TOKEN=$(gcloud auth print-access-token) python tools/sample_notes.py \
+    .data/workspaces.jsonl .data/notes_sample.jsonl
+python -m unittest names_datatest notes_datatest
+```
+  The downloads cost about one Datastore entity read per workspace or revision
+  (~13k and ~10k in 2026-10), within the free daily quota. The data tests skip
+  themselves without the downloads.
