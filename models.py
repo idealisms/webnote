@@ -2,6 +2,8 @@ import datetime
 import hashlib
 import json
 import logging
+import re
+import string
 import zlib
 
 import pytz
@@ -9,22 +11,67 @@ from google.appengine.ext import ndb
 
 TIMEZONE = pytz.timezone('US/Eastern')
 
+# Characters that myescape() in objects.js leaves unescaped.
+_MYESCAPE_SAFE = frozenset(string.ascii_letters + string.digits + '_')
+
+
+def _myescape_char(c):
+    """Escapes one character the way myescape() in objects.js does.
+
+    Like JavaScript, this works on UTF-16 code units, so characters outside the
+    BMP become two escapes (a surrogate pair).
+    """
+    units = c.encode('utf-16-be', 'surrogatepass')
+    ret = ''
+    for i in range(0, len(units), 2):
+        hex_str = '%02X' % int.from_bytes(units[i:i + 2], 'big')
+        if len(hex_str) > 2:
+            hex_str = 'u' + hex_str
+        ret += '%' + hex_str
+    return ret
+
+
+def canonical_ws_name(name):
+    """Returns the stored form of a workspace name.
+
+    The client escapes workspace names itself, and the stored name is the escaped
+    form. Browsers used to escape differently: Chrome, Safari and Edge used
+    myescape() from objects.js, while Firefox used the native escape(). This maps
+    any of those forms (or an unescaped name) to the myescape() form:
+    - Native escape() leaves @*+-./ unescaped; myescape() escapes them
+      (e.g. '-' -> '%2D').
+    - Native escape() pads %u escapes to 4 hex digits; myescape() doesn't
+      (e.g. '%u05D9' -> '%u5D9').
+    - Any other character myescape() would escape (e.g. a raw 'á' from a URL
+      typed by hand) is escaped ('á' -> '%E1').
+    '%' always starts an escape sequence, since both functions escape a literal
+    '%' as '%25'.
+    """
+    escaped = ''.join(
+        c if c in _MYESCAPE_SAFE or c == '%' else _myescape_char(c)
+        for c in name)
+    return re.sub(r'%u0([0-9A-Fa-f]{3})', r'%u\1', escaped)
+
+
 class Workspace(ndb.Model):
     name = ndb.StringProperty()
     nextNoteNum = ndb.IntegerProperty(required=True)
     time = ndb.DateTimeProperty(required=True)
 
     @staticmethod
+    def key_id(wsName):
+        return hashlib.sha1(
+            canonical_ws_name(wsName).encode('ascii')).hexdigest()
+
+    @staticmethod
     def get_by_wsName(wsName):
-        key_id = hashlib.sha1(wsName.encode('ascii')).hexdigest()
-        return Workspace.get_by_id(key_id)
+        return Workspace.get_by_id(Workspace.key_id(wsName))
 
     @staticmethod
     def create(wsName, nextNoteNum, time):
-        key_id = hashlib.sha1(wsName.encode('ascii')).hexdigest()
-
-        return Workspace(id=key_id, name=wsName, nextNoteNum=nextNoteNum,
-                         time=time)
+        return Workspace(id=Workspace.key_id(wsName),
+                         name=canonical_ws_name(wsName),
+                         nextNoteNum=nextNoteNum, time=time)
 
     def localtime_str(self):
         local_datetime = pytz.utc.localize(self.time).astimezone(TIMEZONE)

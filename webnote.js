@@ -501,6 +501,8 @@ Note.prototype.toXML = function()
   ret += " height='" + this.getSize().y + "'";
   ret += " width='" + this.getSize().x + "'";
   ret += " zindex='" + get(this.id).style.zIndex + "'";
+  // Use the native escape() for text: unescape() can't decode myescape()'s
+  // unpadded %u escapes (e.g. %u5D9).
   ret += ">\n" + escape(this.text) + "\n";
   return ret + "</note>"
 }
@@ -1573,7 +1575,7 @@ var workspace =
     this.notes['load'].setText(txt);
     this.reZOrder('load');
 
-    xmlhttp.open('GET', 'getdates.py?name=' + escape(escape(this.name))
+    xmlhttp.open('GET', 'getdates.py?name=' + escape(myescape(this.name))
                  + '&offset=' + offset, true);
     xmlhttp.send('');
   },
@@ -1595,7 +1597,7 @@ var workspace =
       txt = strings.LOADVERSIONS_ABOUT
             + '<div style="text-align: center;"><form method="GET" action="load.py" onmousedown="event.cancelBubble=true;">'
             + '<input type="hidden" name="name" value="'
-            + escape(this.name) + '" /><select class="loadfrm" name="time">';
+            + myescape(this.name) + '" /><select class="loadfrm" name="time">';
       for (var i = 0; i < loadTimes.length && i < numDates; i++) {
         txt += "<option value='" + loadTimes[i].trim() + "'>"
                + (new MyDate(loadTimes[i])) + "</option>";
@@ -1638,7 +1640,7 @@ var workspace =
           } catch (e) { }
         }
     };
-    xmlhttp.open('GET', 'getrecent.py?name=' + escape(escape(workspace.name)), true);
+    xmlhttp.open('GET', 'getrecent.py?name=' + escape(myescape(workspace.name)), true);
     xmlhttp.send('');
   },
 
@@ -1651,7 +1653,7 @@ var workspace =
         'yPos' : '40',
         'bgcolor' : '#ff6060',
         'height' : '100',
-        'text' : strings.COLLISION_WARNING.replace("$1", escape(escape(escape(this.name))))
+        'text' : strings.COLLISION_WARNING.replace("$1", escape(escape(myescape(this.name))))
       });
     } else {
       db('no changes');
@@ -1665,7 +1667,8 @@ var workspace =
    */
   toString : function()
   {
-    var ret = "<workspace name='" + escape(this.name) + "'";
+    // Workspace names are stored in myescape() form (see objects.js).
+    var ret = "<workspace name='" + myescape(this.name) + "'";
     ret += " nextNoteNum='" + this.nextNoteNum + "'";
     ret += ">\n";
     for (nid in this.notes)
@@ -1774,11 +1777,6 @@ function init()
   var closeImg = new Image();
   closeImg.src = 'images/close.gif';
 
-  // a hack for safari compatability
-  if (BROWSER_SAFARI == browser) {
-    escape = myescape;
-    //unescape = myunescape;
-  }
 
   var toolbar = get('toolbar');
   toolbar.onmousedown = cancelBubble;
@@ -1898,7 +1896,7 @@ function docKeyDown(ev) {
       workspace.createNote({
       'text': strings.BOOKMARKLET_TEXT
         + "\n<a href=\"javascript:var d=document;var e=encodeURIComponent;if(d.getSelection)txt=d.getSelection();if(d.selection)txt=d.selection.createRange().text;location.href='" + baseURI + "load.py?name="
-        + escape(escape(escape(workspace.name))) + "&via='+e(location.href)+'&nn='+e(txt);\">"
+        + escape(escape(myescape(workspace.name))) + "&via='+e(location.href)+'&nn='+e(txt);\">"
         + strings.BOOKMARKLET_NAME + "</a>"});
     } else { // forward to note
       n = workspace.notes[workspace.topId];

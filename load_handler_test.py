@@ -1,3 +1,4 @@
+import datetime
 import os
 import unittest
 import webtest
@@ -6,6 +7,7 @@ from google.appengine.ext import ndb
 from google.appengine.ext import testbed
 
 import main
+import models
 
 class LoadHandlerTest(unittest.TestCase):
 
@@ -37,3 +39,25 @@ class LoadHandlerTest(unittest.TestCase):
 
         response = app.get('/webnote/tc%252520testing')
         self.assertEqual(200, response.status_int)
+
+    def get_page(self, path):
+        app = webtest.TestApp(main.app, extra_environ={
+            'APPLICATION_ID': os.environ['APPLICATION_ID']})
+        return app.get(path).text
+
+    def testFirefoxUrlLoadsSameWorkspace(self):
+        time = datetime.datetime(2017, 12, 31)
+        workspace = models.Workspace.create('my%2Dnotes', 1, time)
+        workspace.put()
+        models.Notes(workspaceKey=workspace.key, time=time,
+                     notesJsonArray=[{'id': 'note0', 'text': 'hi'}]).put()
+
+        # The URL escapes the stored name twice more: Chrome's form, then the
+        # form an old Firefox bookmark has.
+        for path in ('/webnote/my%25252Dnotes', '/webnote/my-notes'):
+            self.assertIn('var notes = [{"id": "note0", "text": "hi"}];',
+                          self.get_page(path), path)
+
+    def testNonAsciiNameInUrl(self):
+        # Used to fail with UnicodeEncodeError (a 500).
+        self.assertIn('var notes = [];', self.get_page('/webnote/Bogot%C3%A1'))

@@ -11,3 +11,4 @@ env/
 *_test.py
 *.md
 smoketest.py
+migrations/

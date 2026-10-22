@@ -112,6 +112,25 @@ class SaveHandlerTest(unittest.TestCase):
                        for n in models.Notes.query().fetch())
         self.assertEqual(['first', 'second'], texts)
 
+    def testFirefoxAndChromeNamesShareWorkspace(self):
+        # Firefox used the native escape() for names ("my-notes"); Chrome,
+        # Safari and Edge used myescape() ("my%2Dnotes"). Both are stored in
+        # myescape() form.
+        self.save(make_payload('my-notes', [(NOTE_ATTRS, 'from%20firefox')]))
+        self.save(make_payload('my%2Dnotes', [(NOTE_ATTRS, 'from%20chrome')]))
+
+        self.assertEqual(['my%2Dnotes'],
+                         [w.name for w in models.Workspace.query().fetch()])
+        self.assertEqual(2, models.Notes.query().count())
+
+        for name in ('my-notes', 'my%2Dnotes'):
+            recent = self.app.get('/webnote/getrecent.py', {'name': name})
+            self.assertEqual(
+                models.Workspace.get_by_wsName('my%2Dnotes').localtime_str(),
+                recent.text)
+            dates = self.app.get('/webnote/getdates.py', {'name': name})
+            self.assertEqual(2, len(dates.text.split('|')))
+
     def testIgnoresUnknownAttributes(self):
         attrs = {'noteid': 'note0', 'onclick': 'evil()', 'id': 'x'}
         self.save(make_payload('ws', [(attrs, 'text')]))

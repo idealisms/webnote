@@ -22,8 +22,6 @@ ga('send', 'pageview');
 </script>
 	  <script type="text/javascript" src="objects.js"></script>
     <script type="text/javascript">
-var isSaf = (navigator.userAgent.toLowerCase().indexOf('safari') != -1);
-
 function init()
 {
   document.getElementById('fakeName').focus()
@@ -31,9 +29,8 @@ function init()
 
 function load()
 {
-  if(isSaf)
-    escape = myescape;
-  var name = escape(escape(escape(document.getElementById('fakeName').value)));
+  // Workspace names are stored in myescape() form (see objects.js).
+  var name = escape(escape(myescape(document.getElementById('fakeName').value)));
   if (0 == name.length)
     return;
     
@@ -42,7 +39,7 @@ function load()
 
 function sample()
 {
-  var name = escape(escape(escape('Sample Workspace')));
+  var name = escape(escape(myescape('Sample Workspace')));
   document.location.href = "/webnote/" + name;
 }
     </script>

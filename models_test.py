@@ -2,6 +2,8 @@ import datetime
 import hashlib
 import json
 import os
+import shutil
+import subprocess
 import unittest
 import zlib
 
@@ -49,17 +51,17 @@ class ModelsTest(unittest.TestCase):
 
     def testWorkspaceKeyIsSha1OfName(self):
         workspace = models.Workspace.create(
-            'tc testing', 3, datetime.datetime(2017, 12, 31))
+            'tc%20testing', 3, datetime.datetime(2017, 12, 31))
         self.assertEqual(
-            hashlib.sha1(b'tc testing').hexdigest(), workspace.key.id())
+            hashlib.sha1(b'tc%20testing').hexdigest(), workspace.key.id())
         self.assertEqual('Workspace', workspace.key.kind())
 
     def testGetByWsName(self):
-        self.put_workspace('tc testing', datetime.datetime(2017, 12, 31), 3)
+        self.put_workspace('tc%20testing', datetime.datetime(2017, 12, 31), 3)
         ndb.get_context().clear_cache()
 
-        workspace = models.Workspace.get_by_wsName('tc testing')
-        self.assertEqual('tc testing', workspace.name)
+        workspace = models.Workspace.get_by_wsName('tc%20testing')
+        self.assertEqual('tc%20testing', workspace.name)
         self.assertEqual(3, workspace.nextNoteNum)
         self.assertEqual(datetime.datetime(2017, 12, 31), workspace.time)
         self.assertIsNone(models.Workspace.get_by_wsName('not found'))
@@ -156,6 +158,28 @@ class ModelsTest(unittest.TestCase):
 
         self.assertEqual(notes, workspace.get_notes_list(None))
 
+    def testLookupIgnoresBrowserEncoding(self):
+        # Chrome, Safari and Edge saved "my-notes" as "my%2Dnotes"; Firefox saved
+        # it as "my-notes". Both now refer to the same workspace.
+        workspace = models.Workspace.create(
+            'my-notes', 1, datetime.datetime(2017, 12, 31))
+        self.assertEqual('my%2Dnotes', workspace.name)
+        self.assertEqual(hashlib.sha1(b'my%2Dnotes').hexdigest(),
+                         workspace.key.id())
+        workspace.put()
+
+        for name in ('my-notes', 'my%2Dnotes'):
+            self.assertEqual(workspace.key,
+                             models.Workspace.get_by_wsName(name).key)
+
+    def testLookupWithNonAsciiName(self):
+        # A raw non-ASCII name (e.g. from a URL typed by hand) used to raise
+        # UnicodeEncodeError.
+        self.assertIsNone(models.Workspace.get_by_wsName('Bogot\u00e1'))
+        workspace = models.Workspace.create(
+            'Bogot\u00e1', 1, datetime.datetime(2017, 12, 31))
+        self.assertEqual('Bogot%E1', workspace.name)
+
     def testNotesStorageFormat(self):
         # Documents the raw Datastore format of a Notes entity, which other
         # clients (e.g., a Go port) need to read and write.
@@ -180,6 +204,70 @@ class ModelsTest(unittest.TestCase):
         self.assertIsInstance(raw, bytes)
         self.assertIn('notesJsonArray', entity.unindexed_properties())
         self.assertEqual(notes, json.loads(zlib.decompress(raw).decode('utf8')))
+
+
+class CanonicalWsNameTest(unittest.TestCase):
+    """Documents how stored workspace names are normalized.
+
+    See canonical_ws_name() in models.py. Stored names are the myescape() form
+    from objects.js.
+    """
+
+    def testExamples(self):
+        cases = [
+            # Unaffected: letters, digits, '_' and escapes both browsers agree on.
+            ('Sample%20Workspace', 'Sample%20Workspace'),
+            ('abc_XYZ_123', 'abc_XYZ_123'),
+            ('%25', '%25'),
+            ('caf%E9', 'caf%E9'),
+            ('%u2665', '%u2665'),
+            # Firefox (native escape) leaves @*+-./ unescaped.
+            ('my-notes', 'my%2Dnotes'),
+            ('a.b/c@d*e+f', 'a%2Eb%2Fc%40d%2Ae%2Bf'),
+            # Firefox pads %u escapes for U+0100-U+0FFF to 4 digits.
+            ('%u05D9%u05D5', '%u5D9%u5D5'),
+            ('%u0100', '%u100'),
+            # Raw characters are escaped the way myescape() does.
+            ('a b', 'a%20b'),
+            ('Bogot\u00e1', 'Bogot%E1'),
+            ('\u05d9', '%u5D9'),
+            ('\u2665', '%u2665'),
+            ('\U0001d400', '%uD835%uDC00'),  # UTF-16 surrogate pair
+            # Already canonical.
+            ('my%2Dnotes', 'my%2Dnotes'),
+            ('%u5D9', '%u5D9'),
+        ]
+        for name, expected in cases:
+            self.assertEqual(expected, models.canonical_ws_name(name), name)
+            self.assertEqual(expected, models.canonical_ws_name(expected), name)
+
+    @unittest.skipUnless(shutil.which('node'), 'needs node')
+    def testMatchesJavaScript(self):
+        # For every UTF-16 code unit (and some astral characters), check that
+        # canonicalizing the raw character or Firefox's escape() output gives
+        # the same result as myescape() in objects.js.
+        script = """
+            const vm = require('vm'), fs = require('fs');
+            const ctx = {};
+            vm.createContext(ctx);
+            vm.runInContext(fs.readFileSync('objects.js', 'utf8'), ctx);
+            const chars = [];
+            for (let i = 0; i < 0x10000; i++) chars.push(String.fromCharCode(i));
+            chars.push('\\u{1D400}', '\\u{1F600}', 'my-notes.txt', 'Bogot\\u00e1');
+            console.log(JSON.stringify(chars.map(
+                c => [c, escape(c), ctx.myescape(c)])));
+        """
+        here = os.path.dirname(os.path.abspath(__file__))
+        output = subprocess.run(['node', '-e', script], cwd=here, check=True,
+                                capture_output=True, text=True).stdout
+        for raw, native, expected in json.loads(output):
+            # A raw '%' is ambiguous: canonical_ws_name() treats '%' as the start
+            # of an escape, which is right for real (escaped) names.
+            if raw != '%':
+                self.assertEqual(expected, models.canonical_ws_name(raw),
+                                 repr(raw))
+            self.assertEqual(expected, models.canonical_ws_name(native),
+                             repr(raw))
 
 
 if __name__ == '__main__':
