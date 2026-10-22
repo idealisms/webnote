@@ -13,3 +13,5 @@ env/
 smoketest.py
 migrations/
 difftest.py
+tools/
+*_datatest.py
