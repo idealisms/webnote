@@ -20,3 +20,4 @@ go.mod
 go.sum
 testdata/
 templates/workspace.gotmpl
+browsertest.py

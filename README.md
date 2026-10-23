@@ -38,6 +38,7 @@ coverage run --source=. --omit='env/*,*_test.py,dataflow/*,migrations/*,lib/*,sm
 go vet ./... && go test ./...
 ./run_local_go.sh   # http://localhost:8080/webnote/, data in memory
 python smoketest.py http://localhost:8080 --max-wait 30
+python browsertest.py http://localhost:8080   # needs Playwright, see the script
 ./deploy.sh --go [--no-promote] [--workspace NAME ...]
 ```
   The tests check the Go code against golden files in `testdata/`, written by
