@@ -75,7 +75,9 @@ func (p *jsonParser) skipSpace() {
 }
 
 func (p *jsonParser) consume(lit string) bool {
-	if strings.HasPrefix(string(p.data[p.pos:]), lit) {
+	// Not string(p.data[p.pos:]): that copies the rest of the input on every
+	// call, which made parsing quadratic.
+	if len(p.data)-p.pos >= len(lit) && string(p.data[p.pos:p.pos+len(lit)]) == lit {
 		p.pos += len(lit)
 		return true
 	}
