@@ -1,0 +1,452 @@
+[
+{
+"name": "zlib list",
+"blob": "eJyLrlbKTFGyUsrLL0k1UNJRKkmtKAFykxPTYkoNDFItlWpjAcKFCtI=",
+"meaning22": false,
+"result": {
+"value": [
+{
+"id": "note0",
+"text": "caf\u00e9"
+}
+]
+}
+},
+{
+"name": "zlib list",
+"blob": "eJyLrlbKTFGyUsrLL0k1UNJRKkmtKAFykxPTYkoNDFItlWpjAcKFCtI=",
+"meaning22": true,
+"result": {
+"value": [
+{
+"id": "note0",
+"text": "caf\u00e9"
+}
+]
+}
+},
+{
+"name": "zlib list, spaces",
+"blob": "eJxTiFaoVspMUVKwUlDKyy9JNVCqVYhV4AIASK8F8A==",
+"meaning22": false,
+"result": {
+"value": [
+{
+"id": "note0"
+}
+]
+}
+},
+{
+"name": "zlib list, spaces",
+"blob": "eJxTiFaoVspMUVKwUlDKyy9JNVCqVYhV4AIASK8F8A==",
+"meaning22": true,
+"result": {
+"value": [
+{
+"id": "note0"
+}
+]
+}
+},
+{
+"name": "zlib raw UTF-8",
+"blob": "eJyLrlYqSa0oUbJSSk5MO7xS4dGMZqXaWABgVAjr",
+"meaning22": false,
+"result": {
+"value": [
+{
+"text": "caf\u00e9 \u2603"
+}
+]
+}
+},
+{
+"name": "zlib raw UTF-8",
+"blob": "eJyLrlYqSa0oUbJSSk5MO7xS4dGMZqXaWABgVAjr",
+"meaning22": true,
+"result": {
+"value": [
+{
+"text": "caf\u00e9 \u2603"
+}
+]
+}
+},
+{
+"name": "zlib dict",
+"blob": "eJyrVspMUbJSyssvSTVQqgUAIO0Ebg==",
+"meaning22": false,
+"result": {
+"value": {
+"id": "note0"
+}
+}
+},
+{
+"name": "zlib dict",
+"blob": "eJyrVspMUbJSyssvSTVQqgUAIO0Ebg==",
+"meaning22": true,
+"result": {
+"value": {
+"id": "note0"
+}
+}
+},
+{
+"name": "zlib null",
+"blob": "eJzLK83JAQAEXwG8",
+"meaning22": false,
+"result": {
+"value": null
+}
+},
+{
+"name": "zlib null",
+"blob": "eJzLK83JAQAEXwG8",
+"meaning22": true,
+"result": {
+"error": "returns bytes"
+}
+},
+{
+"name": "zlib string",
+"blob": "eJxTKkmtKFECAAccAgo=",
+"meaning22": false,
+"result": {
+"value": "text"
+}
+},
+{
+"name": "zlib string",
+"blob": "eJxTKkmtKFECAAccAgo=",
+"meaning22": true,
+"result": {
+"value": "text"
+}
+},
+{
+"name": "zlib number",
+"blob": "eJwz1DNNNQYAA04BLQ==",
+"meaning22": false,
+"result": {
+"value": 1500.0
+}
+},
+{
+"name": "zlib number",
+"blob": "eJwz1DNNNQYAA04BLQ==",
+"meaning22": true,
+"result": {
+"value": 1500.0
+}
+},
+{
+"name": "zlib empty list",
+"blob": "eJyLjgUAARUAuQ==",
+"meaning22": false,
+"result": {
+"value": []
+}
+},
+{
+"name": "zlib empty list",
+"blob": "eJyLjgUAARUAuQ==",
+"meaning22": true,
+"result": {
+"value": []
+}
+},
+{
+"name": "zlib not JSON",
+"blob": "eJzLyy9RyMsvSS0GABHGA5s=",
+"meaning22": false,
+"result": {
+"value": [],
+"logged": true
+}
+},
+{
+"name": "zlib not JSON",
+"blob": "eJzLyy9RyMsvSS0GABHGA5s=",
+"meaning22": true,
+"result": {
+"error": "JSONDecodeError"
+}
+},
+{
+"name": "zlib empty",
+"blob": "eJwDAAAAAAE=",
+"meaning22": false,
+"result": {
+"value": [],
+"logged": true
+}
+},
+{
+"name": "zlib empty",
+"blob": "eJwDAAAAAAE=",
+"meaning22": true,
+"result": {
+"error": "JSONDecodeError"
+}
+},
+{
+"name": "zlib invalid UTF-8",
+"blob": "eJyLVmpQigUABHUBfQ==",
+"meaning22": false,
+"result": {
+"value": [],
+"logged": true
+}
+},
+{
+"name": "zlib invalid UTF-8",
+"blob": "eJyLVmpQigUABHUBfQ==",
+"meaning22": true,
+"result": {
+"value": [],
+"logged": true
+}
+},
+{
+"name": "zlib UTF-8 BOM",
+"blob": "eJx7v3t/dCwACuwDIg==",
+"meaning22": false,
+"result": {
+"value": [],
+"logged": true
+}
+},
+{
+"name": "zlib UTF-8 BOM",
+"blob": "eJx7v3t/dCwACuwDIg==",
+"meaning22": true,
+"result": {
+"value": []
+}
+},
+{
+"name": "zlib NaN",
+"blob": "eJyL9kv0iwUABSABtg==",
+"meaning22": false,
+"result": {
+"error": "not representable (NaN)"
+}
+},
+{
+"name": "zlib NaN",
+"blob": "eJyL9kv0iwUABSABtg==",
+"meaning22": true,
+"result": {
+"error": "not representable (NaN)"
+}
+},
+{
+"name": "zlib duplicate keys",
+"blob": "eJyLrlbKTFGyUkpU0oEwkpRqYwE/3QW+",
+"meaning22": false,
+"result": {
+"value": [
+{
+"id": "b"
+}
+]
+}
+},
+{
+"name": "zlib duplicate keys",
+"blob": "eJyLrlbKTFGyUkpU0oEwkpRqYwE/3QW+",
+"meaning22": true,
+"result": {
+"value": [
+{
+"id": "b"
+}
+]
+}
+},
+{
+"name": "zlib lone surrogate escape",
+"blob": "eJyLVoopTbEwMFCKBQAQPgLK",
+"meaning22": false,
+"result": {
+"value": [
+"\ud800"
+]
+}
+},
+{
+"name": "zlib lone surrogate escape",
+"blob": "eJyLVoopTbEwMFCKBQAQPgLK",
+"meaning22": true,
+"result": {
+"value": [
+"\ud800"
+]
+}
+},
+{
+"name": "zlib trailing garbage",
+"blob": "eJyLjgUAARUAuWdhcmJhZ2U=",
+"meaning22": false,
+"result": {
+"value": []
+}
+},
+{
+"name": "zlib trailing garbage",
+"blob": "eJyLjgUAARUAuWdhcmJhZ2U=",
+"meaning22": true,
+"result": {
+"value": []
+}
+},
+{
+"name": "zlib truncated",
+"blob": "eJyLrlbKTFGyUsrLL0k1UKqNBQAr",
+"meaning22": false,
+"result": {
+"value": [],
+"logged": true
+}
+},
+{
+"name": "zlib truncated",
+"blob": "eJyLrlbKTFGyUsrLL0k1UKqNBQAr",
+"meaning22": true,
+"result": {
+"error": "error"
+}
+},
+{
+"name": "zlib level 9",
+"blob": "eNqLrlbKTFGyUqpQqo0FABhPA7g=",
+"meaning22": false,
+"result": {
+"value": [
+{
+"id": "x"
+}
+]
+}
+},
+{
+"name": "zlib level 9",
+"blob": "eNqLrlbKTFGyUqpQqo0FABhPA7g=",
+"meaning22": true,
+"result": {
+"value": [
+{
+"id": "x"
+}
+]
+}
+},
+{
+"name": "raw JSON",
+"blob": "W3siaWQiOiAibm90ZTAifV0=",
+"meaning22": false,
+"result": {
+"value": [
+{
+"id": "note0"
+}
+],
+"logged": true
+}
+},
+{
+"name": "raw JSON",
+"blob": "W3siaWQiOiAibm90ZTAifV0=",
+"meaning22": true,
+"result": {
+"error": "error"
+}
+},
+{
+"name": "raw JSON dict",
+"blob": "eyJpZCI6ICJub3RlMCJ9",
+"meaning22": false,
+"result": {
+"value": {
+"id": "note0"
+},
+"logged": true
+}
+},
+{
+"name": "raw JSON dict",
+"blob": "eyJpZCI6ICJub3RlMCJ9",
+"meaning22": true,
+"result": {
+"error": "error"
+}
+},
+{
+"name": "raw not JSON",
+"blob": "bm90IG5vdGVz",
+"meaning22": false,
+"result": {
+"error": "JSONDecodeError"
+}
+},
+{
+"name": "raw not JSON",
+"blob": "bm90IG5vdGVz",
+"meaning22": true,
+"result": {
+"error": "error"
+}
+},
+{
+"name": "raw invalid UTF-8",
+"blob": "gCBub3Qgbm90ZXM=",
+"meaning22": false,
+"result": {
+"value": [],
+"logged": true
+}
+},
+{
+"name": "raw invalid UTF-8",
+"blob": "gCBub3Qgbm90ZXM=",
+"meaning22": true,
+"result": {
+"error": "error"
+}
+},
+{
+"name": "raw empty",
+"blob": "",
+"meaning22": false,
+"result": {
+"error": "JSONDecodeError"
+}
+},
+{
+"name": "raw empty",
+"blob": "",
+"meaning22": true,
+"result": {
+"error": "error"
+}
+},
+{
+"name": "raw UTF-8 BOM JSON",
+"blob": "77u/W10=",
+"meaning22": false,
+"result": {
+"value": [],
+"logged": true
+}
+},
+{
+"name": "raw UTF-8 BOM JSON",
+"blob": "77u/W10=",
+"meaning22": true,
+"result": {
+"error": "error"
+}
+}
+]
