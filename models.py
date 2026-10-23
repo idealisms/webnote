@@ -54,6 +54,10 @@ def canonical_ws_name(name):
 
 
 class Workspace(ndb.Model):
+    # The Go version writes to Datastore directly, which would leave ndb's
+    # memcache copies stale if Python serves again (a rollback).
+    _use_memcache = False
+
     name = ndb.StringProperty()
     nextNoteNum = ndb.IntegerProperty(required=True)
     time = ndb.DateTimeProperty(required=True)
@@ -113,6 +117,7 @@ class Workspace(ndb.Model):
 
 
 class Notes(ndb.Model):
+    _use_memcache = False
 
     JSKEYS = ('id', 'xPos', 'yPos', 'height', 'width',
               'bgcolor', 'zIndex', 'text')

@@ -172,6 +172,21 @@ class ModelsTest(unittest.TestCase):
             self.assertEqual(workspace.key,
                              models.Workspace.get_by_wsName(name).key)
 
+    def testWorkspaceNotCachedInMemcache(self):
+        # Writes from the Go version (straight to Datastore) must show up.
+        workspace = self.put_workspace('ws', datetime.datetime(2017, 12, 31), 1)
+        # Read it twice so ndb has cached it (the first read only takes a
+        # lock), and flush ndb's batched memcache writes.
+        for _ in range(2):
+            ndb.get_context().clear_cache()
+            models.Workspace.get_by_wsName('ws')
+        ndb.get_context().flush().get_result()
+        entity = datastore.Get(workspace.key.to_old_key())
+        entity['nextNoteNum'] = 7
+        datastore.Put(entity)
+        ndb.get_context().clear_cache()
+        self.assertEqual(7, models.Workspace.get_by_wsName('ws').nextNoteNum)
+
     def testLookupWithNonAsciiName(self):
         # A raw non-ASCII name (e.g. from a URL typed by hand) used to raise
         # UnicodeEncodeError.
