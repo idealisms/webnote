@@ -15,3 +15,7 @@ migrations/
 difftest.py
 tools/
 *_datatest.py
+*.go
+go.mod
+go.sum
+testdata/
