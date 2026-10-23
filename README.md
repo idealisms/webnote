@@ -30,6 +30,19 @@ coverage run --source=. --omit='env/*,*_test.py,dataflow/*,migrations/*,lib/*,sm
   version and smoke-tests the live site. Otherwise the new version is left
   without traffic. The script refuses to deploy uncommitted changes unless
   `ALLOW_DIRTY=1` is set.
+* The Go version (being ported; see `server.go` and `app-go.yaml`) needs Go
+  1.27 (matching the `go127` runtime), and the Datastore emulator and Java for
+  its tests (`gcloud components install cloud-datastore-emulator`). The tests
+  start the emulator themselves.
+```sh
+go vet ./... && go test ./...
+./deploy.sh --go [--no-promote] [--workspace NAME ...]
+```
+  The tests check the Go code against golden files in `testdata/`, written by
+  running the Python code: `env/bin/python tools/gen_golden.py`. Rerun it if the
+  Python behavior changes. With the `.data/` downloads below, the tests also
+  check every stored name and the sample of revisions. `--no-promote` stops
+  after the smoke test and leaves the new version without traffic.
 * Compare two deployed versions on real workspaces (read-only), e.g. a new
   version deployed with `--no-promote` against the live site
 ```sh

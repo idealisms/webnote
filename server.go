@@ -27,6 +27,7 @@ var files embed.FS
 var workspaceTemplate = template.Must(template.ParseFS(files, "templates/workspace.gotmpl"))
 
 func main() {
+	slog.SetDefault(newCloudLogger(os.Stdout))
 	ctx := context.Background()
 	client, err := datastore.NewClient(ctx, datastore.DetectProjectID)
 	if err != nil {
@@ -37,7 +38,8 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	s := &server{client: client, now: time.Now, save: saveWorkspace}
+	s := &server{client: client, now: time.Now, save: saveWorkspace,
+		project: os.Getenv("GOOGLE_CLOUD_PROJECT")}
 	if err := http.ListenAndServe(":"+port, s); err != nil {
 		slog.Error("ListenAndServe", "error", err)
 		os.Exit(1)
@@ -45,9 +47,10 @@ func main() {
 }
 
 type server struct {
-	client *datastore.Client
-	now    func() time.Time
-	save   func(context.Context, *datastore.Client, string, int64, []note, func() time.Time) (*Workspace, error)
+	client  *datastore.Client
+	project string // for grouping log lines with requests
+	now     func() time.Time
+	save    func(context.Context, *datastore.Client, string, int64, []note, func() time.Time) (*Workspace, error)
 }
 
 // webapp2 answers 501 for methods outside this set, before routing.
@@ -131,7 +134,8 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) serverError(req *request, err error) {
-	slog.Error("request failed", "path", req.r.URL.Path, "error", err)
+	slog.Error("request failed", "path", req.r.URL.Path, "error", err,
+		traceAttr(s.project, req.r))
 	http.Error(req.w, "500 Internal Server Error", http.StatusInternalServerError)
 }
 
@@ -410,7 +414,8 @@ func (s *server) saveHandler(req *request) {
 	}
 	ws, err := s.save(req.r.Context(), s.client, save.name, nextNoteNum, save.notes, s.now)
 	if errors.Is(err, errTransactionFailed) {
-		slog.Error("Failed to save workspace", "name", save.name, "error", err)
+		slog.Error("Failed to save workspace", "name", save.name, "error", err,
+			traceAttr(s.project, req.r))
 		req.w.Header().Set("Content-Type", "text/xml; charset=utf-8")
 		req.w.WriteHeader(http.StatusInternalServerError)
 		io.WriteString(req.w, `<return><status value="error"/></return>`)
