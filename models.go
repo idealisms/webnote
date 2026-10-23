@@ -70,11 +70,7 @@ func getWorkspace(ctx context.Context, client *datastore.Client, name string) (*
 func (w *Workspace) notesList(ctx context.Context, client *datastore.Client, loadTime string) (json.RawMessage, error) {
 	t := w.Time
 	if loadTime != "" {
-		parsed, ok, err := parseLoadTime(loadTime)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
+		if parsed, ok := parseLoadTime(loadTime); ok {
 			t = parsed
 		}
 	}

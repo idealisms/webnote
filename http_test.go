@@ -322,6 +322,10 @@ var fixedSincePython = map[string]fixedResponse{
 	"GET /webnote/getdates.py?name=Bogot%E1":        {status: 200},
 	"GET /webnote/getdates.py?name=many&offset=%E1": {sameAs: "GET /webnote/getdates.py?name=many&offset=abc"},
 
+	// A time on a day pytz couldn't handle falls back to the latest
+	// revision, like a bad time.
+	"GET /webnote/Sample%2520Workspace?time=9999-12-31%2000:00:00": {sameAs: "GET /webnote/Sample%2520Workspace?time=bad"},
+
 	// Requests that can't be served as sent are 400s, not 500s. (So are
 	// saves Python answered with a 500; see badSaveSincePython.)
 	"GET /webnote/load.py":                                           {status: 400},

@@ -61,15 +61,13 @@ func TestParseLoadTimeMatchesPython(t *testing.T) {
 	n := 0
 	for _, c := range readGolden(t, "load_time.json") {
 		input, want := c[0], c[1]
-		if want != "fallback" && want != "error" && before1970(want) {
+		if want == "error" {
+			want = "fallback" // Python's page was a 500.
+		} else if want != "fallback" && before1970(want) {
 			continue
 		}
-		utc, ok, err := parseLoadTime(input)
 		got := "fallback"
-		switch {
-		case err != nil:
-			got = "error"
-		case ok:
+		if utc, ok := parseLoadTime(input); ok {
 			got = utc.Format(timeLayout)
 		}
 		if got != want {

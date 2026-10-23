@@ -161,14 +161,12 @@ func TestNotesListAtTime(t *testing.T) {
 		{"2017-12-30 12:00:01", `[]`},
 		// A bad time falls back to the latest revision.
 		{"not a time", `[{"text":"new"}]`},
+		// So does a time on a day pytz couldn't handle (a 500 in Python).
+		{"9999-12-31 00:00:00", `[{"text":"new"}]`},
 	} {
 		if got := notesListOK(t, ctx, client, w, c.loadTime); got != c.want {
 			t.Errorf("notesList(%q) = %s, want %s", c.loadTime, got, c.want)
 		}
-	}
-	// Where pytz raises, the page is a 500.
-	if _, err := w.notesList(ctx, client, "9999-12-31 00:00:00"); !errors.Is(err, errLoadTimeRange) {
-		t.Errorf("notesList(9999-12-31) error = %v", err)
 	}
 }
 

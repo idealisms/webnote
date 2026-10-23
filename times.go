@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"regexp"
 	"strconv"
 	"strings"
@@ -37,18 +36,14 @@ var loadTimePattern = regexp.MustCompile(`^([0-9]{4})-(1[0-2]|0[1-9]|[1-9])-` +
 	`\x{202f}\x{205f}\x{3000}]+` +
 	`(2[0-3]|[0-1][0-9]|[0-9]):([0-5][0-9]|[0-9]):(6[0-1]|[0-5][0-9]|[0-9])$`)
 
-// errLoadTimeRange is where pytz raises for a load time, which makes the
-// workspace page a 500 in Python.
-var errLoadTimeRange = errors.New("load time out of range")
-
 // parseLoadTime parses the workspace page's time parameter, a US/Eastern time
 // like "2017-12-30 12:00:00", into the UTC time of the revision to load, the
 // way get_notes_list() in models.py does. ok is false where Python falls back
 // to the latest revision.
-func parseLoadTime(s string) (t time.Time, ok bool, err error) {
+func parseLoadTime(s string) (t time.Time, ok bool) {
 	m := loadTimePattern.FindStringSubmatch(s)
 	if m == nil {
-		return time.Time{}, false, nil
+		return time.Time{}, false
 	}
 	var f [6]int
 	for i := range f {
@@ -60,13 +55,15 @@ func parseLoadTime(s string) (t time.Time, ok bool, err error) {
 	// datetime() rejects year 0, days past the end of the month and seconds 60
 	// and 61, which time.Date would normalize.
 	if year == 0 || naive.Month() != month || naive.Day() != day || f[5] > 59 {
-		return time.Time{}, false, nil
+		return time.Time{}, false
 	}
-	// pytz's localize() looks a day either side, which overflows.
+	// pytz's localize() looks a day either side, which overflows (a 500 in
+	// Python), and late on 9999-12-31 is past Datastore's last time. No
+	// revision is from these days, so fall back like a bad time.
 	if year == 1 && month == 1 && day == 1 || year == 9999 && month == 12 && day == 31 {
-		return time.Time{}, false, errLoadTimeRange
+		return time.Time{}, false
 	}
-	return easternToUTC(naive), true, nil
+	return easternToUTC(naive), true
 }
 
 // easternToUTC converts a US/Eastern wall-clock time (given as fields in UTC)
