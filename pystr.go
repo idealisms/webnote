@@ -5,7 +5,6 @@ package main
 // []rune.
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -212,15 +211,14 @@ func pyQuote(s string) string {
 	return b.String()
 }
 
-var errBadQuery = errors.New("query string isn't valid UTF-8")
-
 // queryParams is webob's parsing of the query string (parse_qsl_text in
 // webob.compat): '+' is a space, '&' and ';' separate pairs, a name without
-// '=' has an empty value, and each name and value must be valid UTF-8
-// after webob's own unquote().
+// '=' has an empty value. Unlike webob, which fails on a name or value that
+// isn't UTF-8 after its unquote(), such a name or value is read as Latin-1:
+// that's what the native escape() means by %E9.
 type queryParams []struct{ name, value string }
 
-func parseQuery(raw string) (queryParams, error) {
+func parseQuery(raw string) queryParams {
 	var params queryParams
 	raw = strings.ReplaceAll(raw, "+", " ")
 	for _, s1 := range strings.Split(raw, "&") {
@@ -229,14 +227,11 @@ func parseQuery(raw string) (queryParams, error) {
 				continue
 			}
 			name, value, _ := strings.Cut(pair, "=")
-			n, v := webobUnquote(name), webobUnquote(value)
-			if !utf8.ValidString(n) || !utf8.ValidString(v) {
-				return nil, errBadQuery
-			}
+			n, v := utf8OrLatin1(webobUnquote(name)), utf8OrLatin1(webobUnquote(value))
 			params = append(params, struct{ name, value string }{n, v})
 		}
 	}
-	return params, nil
+	return params
 }
 
 // get is webapp2's request.get(): the first value, or "".
@@ -301,6 +296,15 @@ func pyIntBase16Byte(s string) (byte, bool) {
 		return 0, false
 	}
 	return byte(v), true
+}
+
+// utf8OrLatin1 returns s if it's valid UTF-8, and otherwise s decoded as
+// Latin-1.
+func utf8OrLatin1(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	return string(latin1Runes(s))
 }
 
 // latin1Runes decodes bytes as Latin-1, as WSGI does for headers.

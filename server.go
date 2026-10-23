@@ -16,7 +16,6 @@ import (
 	"strings"
 	"text/template"
 	"time"
-	"unicode/utf8"
 
 	"cloud.google.com/go/datastore"
 )
@@ -74,22 +73,9 @@ var (
 )
 
 type request struct {
-	w     http.ResponseWriter
-	r     *http.Request
-	query queryParams
-	err   error // from parsing the query string
-}
-
-// params parses the query string when a handler first reads it, as webob
-// does, so an invalid query only fails requests that read it.
-func (req *request) params() (queryParams, error) {
-	if req.query == nil && req.err == nil {
-		req.query, req.err = parseQuery(req.r.URL.RawQuery)
-		if req.query == nil && req.err == nil {
-			req.query = queryParams{}
-		}
-	}
-	return req.query, req.err
+	w      http.ResponseWriter
+	r      *http.Request
+	params queryParams
 }
 
 // ServeHTTP routes like main.py's webapp2 routes.
@@ -98,13 +84,10 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "501 Not Implemented", http.StatusNotImplemented)
 		return
 	}
-	req := &request{w: w, r: r}
-	// The path is decoded once; webob fails if that isn't UTF-8.
-	path := r.URL.Path
-	if !utf8.ValidString(path) {
-		s.serverError(req, errors.New("path isn't UTF-8"))
-		return
-	}
+	req := &request{w: w, r: r, params: parseQuery(r.URL.RawQuery)}
+	// The path is decoded once. webob failed if that wasn't UTF-8, but the
+	// native escape() writes U+0080-U+00FF as Latin-1 bytes (%E9).
+	path := utf8OrLatin1(r.URL.Path)
 	// Route patterns end with Python's $, which also matches before a final
 	// newline.
 	path = strings.TrimSuffix(path, "\n")
@@ -205,13 +188,8 @@ func (s *server) strings(req *request) {
 }
 
 func (s *server) getRecent(req *request) {
-	params, err := req.params()
-	if err != nil {
-		s.serverError(req, err)
-		return
-	}
 	req.w.Header().Set("Content-Type", "text/plain")
-	name := params.get("name")
+	name := req.params.get("name")
 	if name == "" {
 		return
 	}
@@ -226,13 +204,8 @@ func (s *server) getRecent(req *request) {
 }
 
 func (s *server) getDates(req *request) {
-	params, err := req.params()
-	if err != nil {
-		s.serverError(req, err)
-		return
-	}
 	req.w.Header().Set("Content-Type", "text/plain")
-	name := params.get("name")
+	name := req.params.get("name")
 	if name == "" {
 		return
 	}
@@ -244,7 +217,7 @@ func (s *server) getDates(req *request) {
 		return
 	}
 	offset := int64(0)
-	if v, ok := params.lookup("offset"); !ok {
+	if v, ok := req.params.lookup("offset"); !ok {
 		offset = 0
 	} else if n, ok := pyInt(v); ok {
 		// ndb rejects offsets outside a non-negative int32.
@@ -274,11 +247,7 @@ func workspaceName(req *request, pathName string, fromPath bool) (string, error)
 	if fromPath {
 		name = string(pyUnquote([]rune(pathName)))
 	} else {
-		params, err := req.params()
-		if err != nil {
-			return "", err
-		}
-		name = params.get("name")
+		name = req.params.get("name")
 	}
 	if name == "" {
 		return "", errors.New("no workspace name")
@@ -289,11 +258,7 @@ func workspaceName(req *request, pathName string, fromPath bool) (string, error)
 // notesValue loads the notes of the revision the request asks for (by its
 // time parameter) as a JSON value.
 func (s *server) notesValue(req *request, ws *Workspace) (pyValue, error) {
-	params, err := req.params()
-	if err != nil {
-		return pyValue{}, err
-	}
-	raw, err := ws.notesList(req.r.Context(), s.client, params.get("time"))
+	raw, err := ws.notesList(req.r.Context(), s.client, req.params.get("time"))
 	if err != nil {
 		return pyValue{}, err
 	}

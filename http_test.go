@@ -292,8 +292,81 @@ func newTestServer(client *datastore.Client, now time.Time) *server {
 	return &server{client: client, now: func() time.Time { return now }, save: saveWorkspace}
 }
 
+// fixedResponse is how a golden case's response changed on purpose since the
+// port: the response of another case (sameAs), or a status with a body that
+// contains a string. Error bodies aren't compared.
+type fixedResponse struct {
+	sameAs   string
+	status   int
+	contains string
+}
+
+// fixedSincePython lists the golden cases where the Go version fixes a bug
+// that the Python version had, keyed by httpCase.String().
+var fixedSincePython = map[string]fixedResponse{
+	// A path or query value that isn't UTF-8 is read as Latin-1, which is
+	// what the native escape() writes for U+0080-U+00FF.
+	"GET /webnote/caf%E9":                           {sameAs: "GET /webnote/caf%C3%A9"},
+	"GET /webnote/Bogot%E1":                         {sameAs: "GET /webnote/Bogot%C3%A1"},
+	"GET /webnote/%ED%A0%80":                        {status: 200, contains: "setName(unescape('í \u0080'))"},
+	"GET /webnote/load.py?name=a%E9":                {status: 200, contains: "setName(unescape('aé'))"},
+	"GET /webnote/load.py?x=%E9&name=a":             {status: 200, contains: "setName(unescape('a'))"},
+	"GET /webnote/load.py?name=a&x=%E9":             {status: 200, contains: "setName(unescape('a'))"},
+	"GET /webnote/load.py?name=%ED%A0%80":           {status: 200, contains: "setName(unescape('í \u0080'))"},
+	"GET /webnote/load.py?name=%F4%90%80%80":        {status: 200, contains: "setName(unescape('ô\u0090\u0080\u0080'))"},
+	"GET /webnote/load.py?name=%C0%80":              {status: 200, contains: "setName(unescape('À\u0080'))"},
+	"GET /webnote/Sample%2520Workspace?x=%E9":       {sameAs: "GET /webnote/Sample%2520Workspace"},
+	"GET /webnote/getrecent.py?name=caf%E9":         {sameAs: "GET /webnote/getrecent.py?name=caf%C3%A9"},
+	"GET /webnote/getdates.py?name=caf%E9":          {sameAs: "GET /webnote/getdates.py?name=caf%C3%A9"},
+	"GET /webnote/getrecent.py?name=Bogot%E1":       {status: 200, contains: "2017-12-30 19:00:00"},
+	"GET /webnote/getdates.py?name=Bogot%E1":        {status: 200},
+	"GET /webnote/getdates.py?name=many&offset=%E1": {sameAs: "GET /webnote/getdates.py?name=many&offset=abc"},
+}
+
+// checkFixed checks a response against its entry in fixedSincePython.
+func checkFixed(t *testing.T, c *httpCase, f fixedResponse, cases map[string]*httpCase, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	if f.sameAs != "" {
+		other, ok := cases[f.sameAs]
+		if !ok {
+			t.Fatalf("%s: no case %q", c, f.sameAs)
+		}
+		fixed := *c
+		fixed.Response = other.Response
+		checkResponse(t, &fixed, rec)
+		return
+	}
+	if rec.Code != f.status {
+		t.Errorf("%s: status %d, want %d (body %q)", c, rec.Code, f.status, truncate(rec.Body.String()))
+	} else if !strings.Contains(rec.Body.String(), f.contains) {
+		t.Errorf("%s: body doesn't contain %q\n got %q", c, f.contains, truncate(rec.Body.String()))
+	}
+}
+
 func TestHTTPMatchesPython(t *testing.T) {
 	g := readHTTPGolden(t)
+	cases := map[string]*httpCase{}
+	for i := range g.Cases {
+		cases[g.Cases[i].String()] = &g.Cases[i]
+	}
+	unused := map[string]bool{}
+	for k := range fixedSincePython {
+		unused[k] = true
+	}
+	check := func(c *httpCase, rec *httptest.ResponseRecorder) {
+		t.Helper()
+		if f, ok := fixedSincePython[c.String()]; ok {
+			delete(unused, c.String())
+			checkFixed(t, c, f, cases, rec)
+		} else {
+			checkResponse(t, c, rec)
+		}
+	}
+	defer func() {
+		for k := range unused {
+			t.Errorf("fixedSincePython has %q, which isn't a golden case", k)
+		}
+	}()
 	ctx, client := newTestClient(t)
 	putSeed(t, ctx, client, g)
 	before := storedState(t, ctx, client)
@@ -310,7 +383,7 @@ func TestHTTPMatchesPython(t *testing.T) {
 		if gaeRejects(c.Request.Path) {
 			continue
 		}
-		checkResponse(t, c, c.do(s))
+		check(c, c.do(s))
 		n++
 	}
 	if after := storedState(t, ctx, client); !reflect.DeepEqual(after, before) {
@@ -320,7 +393,7 @@ func TestHTTPMatchesPython(t *testing.T) {
 	for _, c := range saves {
 		emulatorReset(t)
 		putSeed(t, ctx, client, g)
-		checkResponse(t, c, c.do(s))
+		check(c, c.do(s))
 		changed := map[string]storedWorkspace{}
 		for k, v := range storedState(t, ctx, client) {
 			if !reflect.DeepEqual(before[k], v) {
