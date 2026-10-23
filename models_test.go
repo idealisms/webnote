@@ -209,9 +209,10 @@ func TestSaveWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// New workspaces get the canonical name; times are whole seconds.
+	// New workspaces get the canonical name; times are exact to Datastore's
+	// microseconds.
 	if w.Name != "my%2Dnotes" || w.NextNoteNum != 2 || w.Time.Before(before) ||
-		w.Time.Nanosecond() != 0 || w.Key.Name != workspaceKeyID("my-notes") {
+		w.Time.Nanosecond()%1000 != 0 || w.Key.Name != workspaceKeyID("my-notes") {
 		t.Errorf("saveWorkspace = %+v", w)
 	}
 	stored, err := getWorkspace(ctx, client, "my%2Dnotes")
@@ -281,11 +282,12 @@ func TestNotesStorageFormat(t *testing.T) {
 	if want := []string{"notesJsonArray", "time", "time_to_delete", "workspaceKey"}; !sameStrings(keys, want) {
 		t.Errorf("properties = %v, want %v", keys, want)
 	}
-	stamp := w.Time.Format("2006-01-02T15:04:05Z")
+	const stampLayout = "2006-01-02T15:04:05.999999Z"
+	stamp := w.Time.Format(stampLayout)
 	if got := props["time"]["timestampValue"]; got != stamp {
 		t.Errorf("time = %v, want %v", got, stamp)
 	}
-	if got, want := props["time_to_delete"]["timestampValue"], w.Time.AddDate(0, 0, 730).Format("2006-01-02T15:04:05Z"); got != want {
+	if got, want := props["time_to_delete"]["timestampValue"], w.Time.AddDate(0, 0, 730).Format(stampLayout); got != want {
 		t.Errorf("time_to_delete = %v, want %v", got, want)
 	}
 	path := props["workspaceKey"]["keyValue"].(map[string]any)["path"].([]any)[0].(map[string]any)

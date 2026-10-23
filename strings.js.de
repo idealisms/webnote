@@ -49,7 +49,7 @@ var strings = {
   LOADVERSIONS_ABOUT: 'Wenn Du eine vorhergehende Version dieses Arbeitsplatzes laden m\u00F6chtest, w\u00E4hle die Zeit aus der Liste und dr\u00FCcke load.',
   LOADVERSIONS_OLDER: '\u00E4lter',
   LOADVERSIONS_NEWER: 'neuer',
-  LOADVERSIONS_DATE_NOTE: 'alle Zeiten sind in US Eastern Time (-0500)',
+  LOADVERSIONS_DATE_NOTE: 'alle Zeiten in Ihrer Zeitzone',
   LOADVERSIONS_INIT: 'Rufe versionen ab...',
   LOADVERSIONS_NONE: 'Keine Versionen gefunden.  Keine Notizen wurden auf diesem Arbeitsplatz gespeichert.',
 

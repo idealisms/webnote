@@ -1120,7 +1120,7 @@ var workspace =
   numNotes : 0,
   /**
    * The last time that we loaded this workspace (used to check for update
-   * collision).
+   * collision), in microseconds since the epoch.
    * @type int
    */
   loadedTime : 0,
@@ -1576,7 +1576,7 @@ var workspace =
     this.reZOrder('load');
 
     xmlhttp.open('GET', 'getdates.py?name=' + escape(myescape(this.name))
-                 + '&offset=' + offset, true);
+                 + '&offset=' + offset + '&epoch=1', true);
     xmlhttp.send('');
   },
 
@@ -1640,12 +1640,14 @@ var workspace =
           } catch (e) { }
         }
     };
-    xmlhttp.open('GET', 'getrecent.py?name=' + escape(myescape(workspace.name)), true);
+    xmlhttp.open('GET', 'getrecent.py?name=' + escape(myescape(workspace.name))
+                 + '&epoch=1', true);
     xmlhttp.send('');
   },
 
   checkUpdatedCallback : function(xmlhttp) {
-    var loadTime = xmlhttp.responseText.trim();
+    // Times are microseconds since the epoch, exact in a JS number until 2255.
+    var loadTime = Number(xmlhttp.responseText.trim());
     if (loadTime > this.loadedTime) {
       this.createNote( {
         'id' : 'updated',
@@ -1727,7 +1729,7 @@ var workspace =
         }
     };
 
-    xmlhttp.open('POST', 'save.py', true);
+    xmlhttp.open('POST', 'save.py?epoch=1', true);
     var savePayload = workspace.toString();
     xmlhttp.send(savePayload);
   },
@@ -1737,7 +1739,7 @@ var workspace =
     if (doc && 'ok' == doc.getElementsByTagName('status')[0].getAttribute('value')) {
       this.changed = false;
       get('saveImg').className = 'controlsDisabled';
-      this.loadedTime = doc.getElementsByTagName('status')[0].getAttribute('update');
+      this.loadedTime = Number(doc.getElementsByTagName('status')[0].getAttribute('update'));
     } else {
       alert(strings.SAVE_SERVER_ERROR.replace("$1", adminEmail));
     }

@@ -49,7 +49,7 @@ var strings = {
   LOADVERSIONS_ABOUT: 'If you wish to load a previous version of this workspace, select the time from the list and press load.',
   LOADVERSIONS_OLDER: 'older',
   LOADVERSIONS_NEWER: 'newer',
-  LOADVERSIONS_DATE_NOTE: 'all times are US Eastern Time (-0500)',
+  LOADVERSIONS_DATE_NOTE: 'times are in your time zone',
   LOADVERSIONS_INIT: 'Retrieving version history...',
   LOADVERSIONS_NONE: 'No versions found.  No notes have been saved to this workspace.',
 

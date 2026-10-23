@@ -220,14 +220,17 @@ var pageValuePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?s)workspace\.setName\(unescape\('(.*)'\)\);\n  workspace\.loadedTime`),
 	regexp.MustCompile(`(?s)var notes = (.*);\n  for \(var n in notes\)`),
 	regexp.MustCompile(`(?s)<title> (.*)</title>\n</head>`),
+	regexp.MustCompile(`workspace\.loadedTime = (.*);\n  adminEmail`),
 }
 
 // checkPage compares a workspace page with Python's. Python inserted values
 // unescaped; this port escapes them for their context, so the values are
-// compared after unescaping, and the rest byte for byte.
+// compared after unescaping, and the rest byte for byte. Since the port,
+// loadedTime is epoch microseconds instead of a US/Eastern string, and the
+// script URLs have the version (empty in tests).
 func checkPage(t *testing.T, c *httpCase, got, want []byte) {
 	t.Helper()
-	gotSkeleton, wantSkeleton := string(got), string(want)
+	gotSkeleton, wantSkeleton := strings.ReplaceAll(string(got), `.js?v="`, `.js"`), string(want)
 	var gotValues, wantValues []string
 	for _, p := range pageValuePatterns {
 		gm, wm := p.FindStringSubmatchIndex(gotSkeleton), p.FindStringSubmatchIndex(wantSkeleton)
@@ -251,6 +254,15 @@ func checkPage(t *testing.T, c *httpCase, got, want []byte) {
 	}
 	if title := html.UnescapeString(gotValues[2]); title != wantValues[2] {
 		t.Errorf("%s: page title %q, want %q", c, gotValues[2], wantValues[2])
+	}
+	loaded := "''"
+	if us, err := strconv.ParseInt(gotValues[3], 10, 64); err != nil {
+		loaded = "error: " + err.Error()
+	} else if us != 0 {
+		loaded = "'" + localtimeStr(time.UnixMicro(us)) + "'"
+	}
+	if loaded != wantValues[3] {
+		t.Errorf("%s: page loadedTime %s (%s), want %s", c, gotValues[3], loaded, wantValues[3])
 	}
 }
 
@@ -350,6 +362,13 @@ var fixedSincePython = map[string]fixedResponse{
 	"GET /webnote/getdates.py?name=many&offset=2147483648":           {status: 400},
 }
 
+// stringsSincePython are changes to strings.js since the port, applied to
+// Python's responses: times are shown in the browser's time zone.
+var stringsSincePython = strings.NewReplacer(
+	"all times are US Eastern Time (-0500)", "times are in your time zone",
+	"alle Zeiten sind in US Eastern Time (-0500)", "alle Zeiten in Ihrer Zeitzone",
+)
+
 // badSaveSincePython reports whether a golden case is a save that Python
 // answered with a 500. Those were all bad XML or an out-of-range
 // nextNoteNum, which are now 400s that still don't write.
@@ -382,7 +401,11 @@ func TestHTTPMatchesPython(t *testing.T) {
 	g := readHTTPGolden(t)
 	cases := map[string]*httpCase{}
 	for i := range g.Cases {
-		cases[g.Cases[i].String()] = &g.Cases[i]
+		c := &g.Cases[i]
+		cases[c.String()] = c
+		if strings.HasPrefix(c.Request.Path, "/webnote/strings.js") {
+			c.Response.Body = []byte(stringsSincePython.Replace(string(c.Response.Body)))
+		}
 	}
 	unused := map[string]bool{}
 	for k := range fixedSincePython {
@@ -553,5 +576,70 @@ func TestRSSCaching(t *testing.T) {
 	s.ServeHTTP(rec, r)
 	if rec.Code != 404 || rec.Header().Get("Cache-Control") != "" {
 		t.Errorf("missing feed: %d, Cache-Control %q", rec.Code, rec.Header().Get("Cache-Control"))
+	}
+}
+
+func TestEpochTimes(t *testing.T) {
+	_, client := newTestClient(t)
+	s := newTestServer(client, time.Time{})
+	s.version = "v1"
+	do := func(method, path, body string) string {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, httptest.NewRequest(method, path, strings.NewReader(body)))
+		if rec.Code != 200 {
+			t.Fatalf("%s %s: status %d", method, path, rec.Code)
+		}
+		return rec.Body.String()
+	}
+	// Two saves in the same second (17:30:15 US/Eastern) are told apart.
+	first := time.Date(2026, 10, 23, 21, 30, 15, 250_000_123, time.UTC)
+	second := first.Add(500 * time.Millisecond)
+	for i, now := range []time.Time{first, second} {
+		s.now = func() time.Time { return now }
+		got := do("POST", "/webnote/save.py?epoch=1", fmt.Sprintf("<workspace name='ws' nextNoteNum='1'><note noteid='n'>save%d</note></workspace>", i))
+		if want := fmt.Sprintf(`<return><status value="ok" update="%d"/></return>`, now.UnixMicro()); got != want {
+			t.Errorf("save %d = %q, want %q", i, got, want)
+		}
+	}
+	firstUs, secondUs := fmt.Sprint(first.UnixMicro()), fmt.Sprint(second.UnixMicro())
+	if got := do("GET", "/webnote/getrecent.py?name=ws&epoch=1", ""); got != secondUs {
+		t.Errorf("getrecent = %q, want %q", got, secondUs)
+	}
+	if got, want := do("GET", "/webnote/getdates.py?name=ws&epoch=1", ""), secondUs+"|"+firstUs; got != want {
+		t.Errorf("getdates = %q, want %q", got, want)
+	}
+	// Without epoch=1 (pages loaded before), times are US/Eastern as before.
+	if got := do("GET", "/webnote/getrecent.py?name=ws", ""); got != "2026-10-23 17:30:15" {
+		t.Errorf("getrecent without epoch = %q", got)
+	}
+	for _, c := range []struct{ time, want string }{
+		{firstUs, "save0"},
+		{secondUs, "save1"},
+		// A US/Eastern time gets the latest revision in its second.
+		{"2026-10-23%2017:30:15", "save1"},
+		// A time with no revision gets none, as before.
+		{fmt.Sprint(first.UnixMicro() + 1), "[]"},
+		{"2026-10-23%2017:30:14", "[]"},
+		// Times out of range fall back to the latest revision.
+		{"999999999999999999", "save1"},
+		{"99999999999999999999", "save1"},
+	} {
+		page := do("GET", "/webnote/ws?time="+c.time, "")
+		if c.want == "[]" && !strings.Contains(page, "var notes = [];") || c.want != "[]" && !strings.Contains(page, `"text": "`+c.want+`"`) {
+			t.Errorf("time=%s: page doesn't have %s", c.time, c.want)
+		}
+	}
+	page := do("GET", "/webnote/ws", "")
+	for _, want := range []string{
+		"workspace.loadedTime = " + secondUs + ";",
+		`src="objects.js?v=v1"`, `src="strings.js?v=v1"`, `src="webnote.js?v=v1"`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("page doesn't contain %q", want)
+		}
+	}
+	if page := do("GET", "/webnote/new", ""); !strings.Contains(page, "workspace.loadedTime = 0;") {
+		t.Errorf("new workspace's page doesn't have loadedTime 0")
 	}
 }

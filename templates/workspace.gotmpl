@@ -9,9 +9,9 @@
     <link rel="start"  type="text/html" href="/webnote/"
          title="Webnote - an online tool for taking notes">
     <link rel="SHORTCUT ICON" href="webnote_favicon.ico" type="image/x-icon">
-    <script type="text/javascript" src="objects.js"></script>
-    <script type="text/javascript" src="strings.js"></script>
-    <script type="text/javascript" src="webnote.js"></script>
+    <script type="text/javascript" src="objects.js?v={{.Version}}"></script>
+    <script type="text/javascript" src="strings.js?v={{.Version}}"></script>
+    <script type="text/javascript" src="webnote.js?v={{.Version}}"></script>
     <script type="text/javascript">
 
 <!--
@@ -19,7 +19,7 @@ function loadinit()
 {
   debugOn = 0;
   workspace.setName(unescape('{{.NameJS}}'));
-  workspace.loadedTime = '{{.LastTime}}';
+  workspace.loadedTime = {{.LoadedTime}};
   adminEmail = 'webnote@ponderer.org';
   baseURI = '/webnote/';
   numDates = 10;

@@ -306,56 +306,32 @@ Color.prototype.hsvadj = function(h, s, v)
   return this;
 };
 
-var weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 /**
  * Create a new MyDate object.
- * @class A class representing the current date and time.
- * @param {String} a string of the form "YY-MM-DD HH:mm:ss"
+ * @class A revision time, shown in the browser's time zone.
+ * @param {String} us microseconds since the epoch, as the server sends them
  * @constructor
  */
-function MyDate(stddt)
+function MyDate(us)
 {
-  var tokens = stddt.split(' ');
-  var dateTokens = tokens[0].split('-');
-  var timeTokens = tokens[1].split(':');
-
-  var dateobj = new Date();
-  dateobj.setYear(dateTokens[0]);
-  dateobj.setMonth(dateTokens[1] - 1);
-  dateobj.setDate(dateTokens[2]);
-  dateobj.setHours(timeTokens[0]);
-  dateobj.setMinutes(timeTokens[1]);
-  dateobj.setSeconds(timeTokens[2]);
-
   /**
+   * The time rounded to the second, which is all toString() shows.
    * @type Date
    */
-  this.dateobj = dateobj;
+  this.dateobj = new Date(Math.round(Number(us) / 1e6) * 1000);
   return this;
 }
 /**
- * Left pad a number with zeros (up to 2 digits).  For example, 4 to "04".
- * @type String
- */
-MyDate.prototype.pad = function(s)
-{
-  while (s.toString().length < 2)
-    s = '0' + s;
-  return s;
-};
-/**
- * A pretty (well, to me at least) string representing the date.
- * For example, "Mon Jan 4, 13:42:12"
+ * The date and time in the browser's locale, time zone and 12/24-hour clock.
+ * For example, "Fri, Oct 23, 2026, 5:30:15 PM"
  * @type String
  */
 MyDate.prototype.toString = function()
 {
-  var d = this.dateobj;
-  return weekdays[d.getDay()] + ' ' + months[d.getMonth()] + ' ' + d.getDate()
-          + ', ' + this.pad(d.getHours()) + ':' + this.pad(d.getMinutes())
-          + ':' + this.pad(d.getSeconds());
+  return this.dateobj.toLocaleString(undefined, {
+    weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', second: '2-digit'
+  });
 };
 
 function isEsc(s)

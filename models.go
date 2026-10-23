@@ -64,20 +64,21 @@ func getWorkspace(ctx context.Context, client *datastore.Client, name string) (*
 }
 
 // notesList returns the notes of the revision saved at the workspace's latest
-// time, or at loadTime (US/Eastern, see parseLoadTime()) if it's set and valid.
-// The notes are a JSON value, normally an array of objects; they're [] if
-// there's no such revision.
+// time, or at loadTime if it's set and valid: exactly that time if it's
+// epochMicros(), or within that second if it's US/Eastern (see
+// parseLoadTime()). Revisions used to be whole seconds; now they're exact, so
+// a US/Eastern time from a page opened before that matches the latest
+// revision saved in its second. The notes are a JSON value, normally an
+// array of objects; they're [] if there's no such revision.
 func (w *Workspace) notesList(ctx context.Context, client *datastore.Client, loadTime string) (json.RawMessage, error) {
-	t := w.Time
-	if loadTime != "" {
-		if parsed, ok := parseLoadTime(loadTime); ok {
-			t = parsed
-		}
+	q := datastore.NewQuery("Notes").FilterField("workspaceKey", "=", w.Key).Limit(1)
+	if t, ok := parseEpochMicros(loadTime); ok {
+		q = q.FilterField("time", "=", t)
+	} else if t, ok := parseLoadTime(loadTime); ok {
+		q = q.FilterField("time", ">=", t).FilterField("time", "<", t.Add(time.Second)).Order("-time")
+	} else {
+		q = q.FilterField("time", "=", w.Time)
 	}
-	q := datastore.NewQuery("Notes").
-		FilterField("workspaceKey", "=", w.Key).
-		FilterField("time", "=", t).
-		Limit(1)
 	var notes []Notes
 	if _, err := client.GetAll(ctx, q, &notes); ignoreFieldMismatch(err) != nil {
 		return nil, err
@@ -112,8 +113,8 @@ func notesTimes(ctx context.Context, client *datastore.Client, key *datastore.Ke
 var errTransactionFailed = errors.New("transaction failed")
 
 // saveWorkspace saves a revision of a workspace, creating the workspace if
-// needed, and returns the workspace. Times are whole seconds, like the times
-// the client sends back to load a revision.
+// needed, and returns the workspace. Times are exact (to Datastore's
+// microseconds), so the time in the response is the stored one.
 func saveWorkspace(ctx context.Context, client *datastore.Client, name string, nextNoteNum int64, notes []note, now func() time.Time) (*Workspace, error) {
 	blob, err := encodeNotes(notes)
 	if err != nil {
@@ -122,7 +123,7 @@ func saveWorkspace(ctx context.Context, client *datastore.Client, name string, n
 	var w *Workspace
 	// ndb.transaction(retries=5) makes up to 6 attempts.
 	_, err = client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
-		now := now().UTC().Truncate(time.Second)
+		now := now().UTC().Truncate(time.Microsecond)
 		w = &Workspace{Key: workspaceKey(name)}
 		err := ignoreFieldMismatch(tx.Get(w.Key, w))
 		if errors.Is(err, datastore.ErrNoSuchEntity) {

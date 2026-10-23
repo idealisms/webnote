@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -38,7 +39,7 @@ func main() {
 		port = "8080"
 	}
 	s := &server{client: client, now: time.Now, save: saveWorkspace,
-		project: os.Getenv("GOOGLE_CLOUD_PROJECT")}
+		project: os.Getenv("GOOGLE_CLOUD_PROJECT"), version: os.Getenv("GAE_VERSION")}
 	var handler http.Handler = s
 	if os.Getenv("WEBNOTE_SERVE_STATIC") == "1" {
 		static, err := readStaticHandlers("app-go.yaml")
@@ -57,6 +58,7 @@ func main() {
 type server struct {
 	client  *datastore.Client
 	project string // for grouping log lines with requests
+	version string // GAE_VERSION
 	now     func() time.Time
 	save    func(context.Context, *datastore.Client, string, int64, []note, func() time.Time) (*Workspace, error)
 }
@@ -76,6 +78,16 @@ type request struct {
 	w      http.ResponseWriter
 	r      *http.Request
 	params queryParams
+}
+
+// formatTime formats a time for getrecent.py, getdates.py and save.py: as
+// epochMicros() if the client asks with epoch=1, and otherwise in US/Eastern
+// for pages loaded before the client asked (see notesList()).
+func (req *request) formatTime(t time.Time) string {
+	if req.params.get("epoch") == "1" {
+		return epochMicros(t)
+	}
+	return localtimeStr(t)
 }
 
 // ServeHTTP routes like main.py's webapp2 routes.
@@ -208,7 +220,7 @@ func (s *server) getRecent(req *request) {
 	} else if ws == nil {
 		return
 	}
-	writeBody(req.w, "text/plain; charset=utf-8", []byte(localtimeStr(ws.Time)))
+	writeBody(req.w, "text/plain; charset=utf-8", []byte(req.formatTime(ws.Time)))
 }
 
 func (s *server) getDates(req *request) {
@@ -242,7 +254,7 @@ func (s *server) getDates(req *request) {
 	}
 	dates := make([]string, len(times))
 	for i, t := range times {
-		dates[i] = localtimeStr(t)
+		dates[i] = req.formatTime(t)
 	}
 	// Writing, even nothing, adds the charset.
 	writeBody(req.w, "text/plain; charset=utf-8", []byte(strings.Join(dates, "|")))
@@ -274,8 +286,13 @@ func (s *server) notesValue(req *request, ws *Workspace) (pyValue, error) {
 }
 
 type pageValues struct {
-	NameJS, NameHTML, LastTime, NotesJS string
-	NextNoteNum                         int64
+	NameJS, NameHTML, NotesJS string
+	// LoadedTime is the workspace's time as epochMicros(), or 0.
+	LoadedTime  string
+	NextNoteNum int64
+	// Version is the deployed version, so a new page doesn't run scripts
+	// cached from an older one.
+	Version string
 }
 
 func (s *server) load(req *request, pathName string, fromPath bool) {
@@ -285,9 +302,11 @@ func (s *server) load(req *request, pathName string, fromPath bool) {
 		return
 	}
 	values := pageValues{
-		NameJS:   jsStringEscape(name),
-		NameHTML: html.EscapeString(name),
-		NotesJS:  "[]",
+		NameJS:     jsStringEscape(name),
+		NameHTML:   html.EscapeString(name),
+		NotesJS:    "[]",
+		LoadedTime: "0",
+		Version:    url.QueryEscape(s.version),
 	}
 	ws, err := getWorkspace(req.r.Context(), s.client, name)
 	if err != nil {
@@ -296,7 +315,7 @@ func (s *server) load(req *request, pathName string, fromPath bool) {
 	}
 	if ws != nil {
 		values.NextNoteNum = ws.NextNoteNum
-		values.LastTime = localtimeStr(ws.Time)
+		values.LoadedTime = epochMicros(ws.Time)
 		notes, err := s.notesValue(req, ws)
 		if err != nil {
 			s.serverError(req, err)
@@ -423,5 +442,5 @@ func (s *server) saveHandler(req *request) {
 	// The client compares this against getrecent.py to detect saves from
 	// other clients, so it must use the same format.
 	writeBody(req.w, "text/xml; charset=utf-8",
-		[]byte(`<return><status value="ok" update="`+localtimeStr(ws.Time)+`"/></return>`))
+		[]byte(`<return><status value="ok" update="`+req.formatTime(ws.Time)+`"/></return>`))
 }

@@ -21,6 +21,31 @@ func mustLoadLocation(name string) *time.Location {
 	return loc
 }
 
+// epochMicros formats a stored time as microseconds since the epoch, the
+// exact value Datastore keeps. The client asks for this with epoch=1 and
+// shows the time in the browser's time zone.
+func epochMicros(t time.Time) string {
+	return strconv.FormatInt(t.UnixMicro(), 10)
+}
+
+// parseEpochMicros parses an epochMicros() time: only digits, so it can't be
+// mistaken for a US/Eastern time.
+func parseEpochMicros(s string) (time.Time, bool) {
+	if s == "" || strings.Trim(s, "0123456789") != "" {
+		return time.Time{}, false
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return time.Time{}, false
+	}
+	t := time.UnixMicro(n).UTC()
+	// Datastore's times are years 1 through 9999.
+	if t.Year() > 9999 {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
 // localtimeStr formats a stored (UTC) time in US/Eastern, like localtime_str()
 // in models.py.
 func localtimeStr(t time.Time) string {

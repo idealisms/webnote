@@ -67,7 +67,7 @@ def note_texts(page):
 def run(browser, base, name, previous):
     """Runs the client on one workspace. previous is the sorted note texts
     another browser left, or None. Returns the note texts this run left."""
-    page = browser.new_page()
+    page = browser.new_page(timezone_id='Asia/Tokyo')  # Not the server's US/Eastern.
     problems = []
     def on_dialog(dialog):
         # Leaving with unsaved changes (the history note counts) asks first.
@@ -105,7 +105,7 @@ def run(browser, base, name, previous):
     check(page.evaluate('workspace.loadedTime') == first_time,
           'the page shows the save time')
 
-    time.sleep(1.1)  # Revisions are keyed by the second.
+    # No pause: saves in the same second are separate revisions.
     second = TEXT % (run_id + ' second')
     second_time = edit_and_save(page, note_id, second)
     check(second_time > first_time, 'second save is newer')
@@ -119,8 +119,15 @@ def run(browser, base, name, previous):
     page.click('#reloadImg')
     page.wait_for_selector('select.loadfrm')
     options = page.eval_on_selector_all('select.loadfrm option', 'os => os.map(o => o.value)')
-    check(options[:2] == [second_time, first_time], 'history lists both saves, newest first')
-    page.select_option('select.loadfrm', first_time)
+    check(options[:2] == [str(second_time), str(first_time)],
+          'history lists both saves, newest first')
+    labels = page.eval_on_selector_all('select.loadfrm option', 'os => os.map(o => o.text)')
+    expected = page.evaluate(
+        't => new Date(Math.round(t / 1e6) * 1000).toLocaleString(undefined, {'
+        "weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',"
+        "hour: 'numeric', minute: '2-digit', second: '2-digit'})", first_time)
+    check(labels[1] == expected, 'history shows times in the browser time zone (%r)' % labels[1])
+    page.select_option('select.loadfrm', str(first_time))
     with page.expect_navigation():
         page.click('#load input[type=submit]')
     check('/webnote/load.py?' in page.url, 'the history form opens load.py')
@@ -138,7 +145,6 @@ def run(browser, base, name, previous):
     page.wait_for_function("get('saveImg').className == 'controls'")
     page.click('#saveImg')
     wait_for_save(page)
-    time.sleep(1.1)  # So the next run's saves get a second of their own.
     page.reload()
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
     end_texts = note_texts(page)
