@@ -506,3 +506,52 @@ func TestSaveUpdateMatchesGetRecent(t *testing.T) {
 		t.Errorf("save = %q, getrecent = %q", saved.Body.String(), recent.Body.String())
 	}
 }
+
+func TestRSSCaching(t *testing.T) {
+	_, client := newTestClient(t)
+	saved := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
+	s := newTestServer(client, saved)
+	r := httptest.NewRequest("POST", "/webnote/save.py", strings.NewReader("<workspace name='ws' nextNoteNum='1'><note noteid='n'>x</note></workspace>"))
+	s.ServeHTTP(httptest.NewRecorder(), r)
+	get := func(ifModifiedSince string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", "/webnote/ws.xml", nil)
+		if ifModifiedSince != "" {
+			r.Header.Set("If-Modified-Since", ifModifiedSince)
+		}
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, r)
+		return rec
+	}
+	const lastModified = "Fri, 23 Oct 2026 12:00:00 GMT"
+	for _, c := range []struct {
+		ifModifiedSince string
+		status          int
+	}{
+		{"", 200},
+		{lastModified, 304},
+		{"Fri, 23 Oct 2026 12:00:01 GMT", 304},
+		{"Fri, 23 Oct 2026 11:59:59 GMT", 200},
+		{"not a date", 200},
+	} {
+		rec := get(c.ifModifiedSince)
+		if rec.Code != c.status {
+			t.Errorf("If-Modified-Since %q: status %d, want %d", c.ifModifiedSince, rec.Code, c.status)
+		}
+		if got := rec.Header().Get("Last-Modified"); got != lastModified {
+			t.Errorf("If-Modified-Since %q: Last-Modified %q", c.ifModifiedSince, got)
+		}
+		if got := rec.Header().Get("Cache-Control"); got != "max-age=60" {
+			t.Errorf("If-Modified-Since %q: Cache-Control %q", c.ifModifiedSince, got)
+		}
+		if c.status == 304 && rec.Body.Len() != 0 {
+			t.Errorf("If-Modified-Since %q: 304 has a body", c.ifModifiedSince)
+		}
+	}
+	// A missing feed isn't cached.
+	r = httptest.NewRequest("GET", "/webnote/missing.xml", nil)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, r)
+	if rec.Code != 404 || rec.Header().Get("Cache-Control") != "" {
+		t.Errorf("missing feed: %d, Cache-Control %q", rec.Code, rec.Header().Get("Cache-Control"))
+	}
+}

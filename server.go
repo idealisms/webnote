@@ -361,6 +361,19 @@ func (s *server) rss(req *request, pathName string, fromPath bool) {
 		req.w.WriteHeader(http.StatusNotFound)
 		return
 	}
+	// A feed only changes when the workspace is saved. Feed readers poll
+	// (one polls every 8 seconds), so let them keep it for a minute, and
+	// answer their If-Modified-Since without reading the notes.
+	lastModified := ws.Time.UTC().Truncate(time.Second)
+	cacheHeaders := func() {
+		req.w.Header().Set("Cache-Control", "max-age=60")
+		req.w.Header().Set("Last-Modified", lastModified.Format(http.TimeFormat))
+	}
+	if since, err := http.ParseTime(req.r.Header.Get("If-Modified-Since")); err == nil && !lastModified.After(since) {
+		cacheHeaders()
+		req.w.WriteHeader(http.StatusNotModified)
+		return
+	}
 	notes, err := s.notesValue(req, ws)
 	if err != nil {
 		s.serverError(req, err)
@@ -371,6 +384,7 @@ func (s *server) rss(req *request, pathName string, fromPath bool) {
 		s.serverError(req, err)
 		return
 	}
+	cacheHeaders()
 	writeBody(req.w, "text/xml; charset=utf-8", body)
 }
 
