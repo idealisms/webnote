@@ -321,6 +321,28 @@ var fixedSincePython = map[string]fixedResponse{
 	"GET /webnote/getrecent.py?name=Bogot%E1":       {status: 200, contains: "2017-12-30 19:00:00"},
 	"GET /webnote/getdates.py?name=Bogot%E1":        {status: 200},
 	"GET /webnote/getdates.py?name=many&offset=%E1": {sameAs: "GET /webnote/getdates.py?name=many&offset=abc"},
+
+	// Requests that can't be served as sent are 400s, not 500s. (So are
+	// saves Python answered with a 500; see badSaveSincePython.)
+	"GET /webnote/load.py":                                           {status: 400},
+	"GET /webnote/load.py?name":                                      {status: 400},
+	"GET /webnote/load.py?name=":                                     {status: 400},
+	"GET /webnote/load.py?nam=x":                                     {status: 400},
+	"GET /webnote/load.py?NAME=a":                                    {status: 400},
+	"GET /webnote/rss.py":                                            {status: 400},
+	"GET /webnote/rss.py?name=":                                      {status: 400},
+	"GET /webnote/getdates.py?name=many&offset=-1":                   {status: 400},
+	"GET /webnote/getdates.py?name=many&offset=-14":                  {status: 400},
+	"GET /webnote/getdates.py?name=many&offset=99999999999999999999": {status: 400},
+	"GET /webnote/getdates.py?name=many&offset=2147483648":           {status: 400},
+}
+
+// badSaveSincePython reports whether a golden case is a save that Python
+// answered with a 500. Those were all bad XML or an out-of-range
+// nextNoteNum, which are now 400s that still don't write.
+func badSaveSincePython(c *httpCase) bool {
+	return c.Request.Method == "POST" && strings.HasPrefix(c.Request.Path, "/webnote/save.py") &&
+		c.Response.Status == 500
 }
 
 // checkFixed checks a response against its entry in fixedSincePython.
@@ -358,6 +380,8 @@ func TestHTTPMatchesPython(t *testing.T) {
 		if f, ok := fixedSincePython[c.String()]; ok {
 			delete(unused, c.String())
 			checkFixed(t, c, f, cases, rec)
+		} else if badSaveSincePython(c) {
+			checkFixed(t, c, fixedResponse{status: 400}, cases, rec)
 		} else {
 			checkResponse(t, c, rec)
 		}

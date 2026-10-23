@@ -125,6 +125,14 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// badRequest answers a request that can't be served as sent. Python
+// answered these with a 500.
+func (s *server) badRequest(req *request, err error) {
+	slog.Warn("bad request", "path", req.r.URL.Path, "error", err,
+		traceAttr(s.project, req.r))
+	http.Error(req.w, "400 Bad Request", http.StatusBadRequest)
+}
+
 func (s *server) serverError(req *request, err error) {
 	slog.Error("request failed", "path", req.r.URL.Path, "error", err,
 		traceAttr(s.project, req.r))
@@ -222,7 +230,7 @@ func (s *server) getDates(req *request) {
 	} else if n, ok := pyInt(v); ok {
 		// ndb rejects offsets outside a non-negative int32.
 		if !n.IsInt64() || n.Int64() < 0 || n.Int64() > math.MaxInt32 {
-			s.serverError(req, fmt.Errorf("offset %v out of range", n))
+			s.badRequest(req, fmt.Errorf("offset %v out of range", n))
 			return
 		}
 		offset = n.Int64()
@@ -241,7 +249,7 @@ func (s *server) getDates(req *request) {
 }
 
 // workspaceName is LoadHandler.get_workspace_name(): the name from the path
-// (decoded once more), or the name parameter. An error is a 500.
+// (decoded once more), or the name parameter. An error is a bad request.
 func workspaceName(req *request, pathName string, fromPath bool) (string, error) {
 	name := ""
 	if fromPath {
@@ -273,7 +281,7 @@ type pageValues struct {
 func (s *server) load(req *request, pathName string, fromPath bool) {
 	name, err := workspaceName(req, pathName, fromPath)
 	if err != nil {
-		s.serverError(req, err)
+		s.badRequest(req, err)
 		return
 	}
 	values := pageValues{
@@ -341,7 +349,7 @@ var jsSafeJSON = strings.NewReplacer("<", `<`, ">", `>`, "&", `&`).Replace
 func (s *server) rss(req *request, pathName string, fromPath bool) {
 	name, err := workspaceName(req, pathName, fromPath)
 	if err != nil {
-		s.serverError(req, err)
+		s.badRequest(req, err)
 		return
 	}
 	ws, err := getWorkspace(req.r.Context(), s.client, name)
@@ -374,14 +382,14 @@ func (s *server) saveHandler(req *request) {
 	}
 	save, err := parseSaveBody(body)
 	if err != nil {
-		s.serverError(req, err)
+		s.badRequest(req, err)
 		return
 	}
 	nextNoteNum := int64(0)
 	if n, ok := pyInt(save.nextNoteNum); ok {
 		// Datastore integers are 64-bit; ndb fails the save otherwise.
 		if !n.IsInt64() {
-			s.serverError(req, fmt.Errorf("nextNoteNum %v out of range", n))
+			s.badRequest(req, fmt.Errorf("nextNoteNum %v out of range", n))
 			return
 		}
 		nextNoteNum = n.Int64()
