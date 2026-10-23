@@ -49,7 +49,14 @@ def page_values(status, page):
     return values
 
 
-def rss_values(status, body):
+def rss_values(status, body, base):
+    """The feed's values, with the server's own host replaced in the links
+    it writes. (Note text can mention a host too, so not everywhere.)"""
+    def unbase(url):
+        if url and url.startswith(base + '/'):
+            return '{base}' + url[len(base):]
+        return url
+
     if status != 200:
         return {'status': status}
     try:
@@ -59,8 +66,11 @@ def rss_values(status, body):
     fields = ('title', 'link', 'lastBuildDate')
     return {
         'status': status,
-        'channel': {f: channel.findtext(f) for f in fields},
-        'items': [{f: item.findtext(f) for f in ('title', 'description', 'guid')}
+        'channel': dict({f: channel.findtext(f) for f in fields},
+                        link=unbase(channel.findtext('link'))),
+        'items': [{'title': item.findtext('title'),
+                   'description': item.findtext('description'),
+                   'guid': unbase(item.findtext('guid'))}
                   for item in channel.findall('item')],
     }
 
@@ -72,13 +82,7 @@ class Comparer:
         self.seed = seed
 
     def both(self, path_fn):
-        # Responses can include their own host (e.g. RSS links), so replace it
-        # with a placeholder before comparing.
-        results = []
-        for base in (self.base, self.other):
-            status, body = fetch(path_fn(base))
-            results.append((status, body.replace(base, '{base}')))
-        return results
+        return [fetch(path_fn(base)) for base in (self.base, self.other)]
 
     def compare_workspace(self, name):
         """Returns a list of (check, ours, theirs) differences."""
@@ -117,8 +121,9 @@ class Comparer:
                               page_values(*theirs)))
 
         ours, theirs = self.both(lambda b: workspace_url(b, name) + '.xml')
-        if rss_values(*ours) != rss_values(*theirs):
-            diffs.append(('rss', rss_values(*ours), rss_values(*theirs)))
+        ours, theirs = rss_values(*ours, self.base), rss_values(*theirs, self.other)
+        if ours != theirs:
+            diffs.append(('rss', ours, theirs))
         return diffs
 
 
