@@ -7,42 +7,36 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 )
 
 var errRSSNotes = errors.New("notes aren't a list of dicts with string text")
 
-// rssWriter writes XML the way xml.sax.saxutils.XMLGenerator does with
-// encoding iso-8859-1 (characters above U+00FF become character references),
-// into a webapp2 response, which decodes each write as UTF-8. So a text chunk
-// whose Latin-1 bytes aren't valid UTF-8 fails (a 500).
+// rssWriter writes XML the way xml.sax.saxutils.XMLGenerator does, except
+// that every non-ASCII character is a character reference. (Python wrote
+// U+0080-U+00FF as Latin-1 bytes into a response that decoded them as UTF-8,
+// which was a 500 or the wrong characters.) The output is ASCII, so it
+// matches both the declared iso-8859-1 and the Content-Type's UTF-8.
 type rssWriter struct {
-	b   strings.Builder
-	err error
+	b strings.Builder
 }
 
 func (w *rssWriter) raw(s string) { w.b.WriteString(s) }
 
 func (w *rssWriter) text(s []rune) {
-	var chunk []byte
 	for _, r := range s {
 		switch {
 		case r == '&':
-			chunk = append(chunk, "&amp;"...)
+			w.b.WriteString("&amp;")
 		case r == '<':
-			chunk = append(chunk, "&lt;"...)
+			w.b.WriteString("&lt;")
 		case r == '>':
-			chunk = append(chunk, "&gt;"...)
-		case r < 0x100:
-			chunk = append(chunk, byte(r))
+			w.b.WriteString("&gt;")
+		case r < 0x80:
+			w.b.WriteRune(r)
 		default:
-			chunk = append(chunk, fmt.Sprintf("&#%d;", r)...)
+			fmt.Fprintf(&w.b, "&#%d;", r)
 		}
 	}
-	if !utf8.Valid(chunk) && w.err == nil {
-		w.err = errors.New("RSS text isn't valid UTF-8 as Latin-1")
-	}
-	w.b.Write(chunk)
 }
 
 func (w *rssWriter) element(name string, text []rune) {
@@ -129,9 +123,6 @@ func renderRSS(hostURL string, w *Workspace, notes pyValue) ([]byte, error) {
 		out.raw("</guid></item>")
 	}
 	out.raw("</channel></rss>")
-	if out.err != nil {
-		return nil, out.err
-	}
 	return []byte(out.b.String()), nil
 }
 

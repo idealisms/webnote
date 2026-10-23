@@ -326,6 +326,15 @@ var fixedSincePython = map[string]fixedResponse{
 	// revision, like a bad time.
 	"GET /webnote/Sample%2520Workspace?time=9999-12-31%2000:00:00": {sameAs: "GET /webnote/Sample%2520Workspace?time=bad"},
 
+	// RSS writes every non-ASCII character as a character reference. Python
+	// failed on U+0080-U+00FF, or showed them as the wrong characters.
+	"GET /webnote/blob%2520unicode.xml":          {status: 200, contains: "<title>&#233; &#8232; &#128512; / &lt;/script&gt;</title>"},
+	"GET /webnote/rss%2520latin1.xml":            {status: 200, contains: "<title>caf&#233;</title><description>caf&#233;</description>"},
+	"GET /webnote/rss%2520utf8%2520escaped.xml":  {status: 200, contains: "<title>caf&#233;</title><description>caf&#233;</description>"},
+	"GET /webnote/rss%2520valid%2520utf8.xml":    {status: 200, contains: "<title>&#195;&#169;</title><description>&#195;&#169;</description>"},
+	"GET /webnote/rss%2520split.xml":             {status: 200, contains: "<title>&#169;</title><description>&#169;</description><guid isPermaLink=\"true\">http://localhost/webnote/rss%252520split#n1</guid></item><item><title>&#195;</title>"},
+	"GET /webnote/caf%2525C3%2525A9%2520rss.xml": {status: 200, contains: "<title>caf&#233; rss</title>"},
+
 	// Requests that can't be served as sent are 400s, not 500s. (So are
 	// saves Python answered with a 500; see badSaveSincePython.)
 	"GET /webnote/load.py":                                           {status: 400},
