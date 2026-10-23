@@ -1,6 +1,6 @@
 module webnote
 
-go 1.26.0
+go 1.27
 
 require cloud.google.com/go/datastore v1.28.0
 
