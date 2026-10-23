@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"strings"
 	"time"
-	"unicode/utf16"
 	"unicode/utf8"
 
 	"cloud.google.com/go/datastore"
@@ -119,7 +118,7 @@ var errTransactionFailed = errors.New("transaction failed")
 // saveWorkspace saves a revision of a workspace, creating the workspace if
 // needed, and returns the workspace. Times are whole seconds, like the times
 // the client sends back to load a revision.
-func saveWorkspace(ctx context.Context, client *datastore.Client, name string, nextNoteNum int64, notes []note) (*Workspace, error) {
+func saveWorkspace(ctx context.Context, client *datastore.Client, name string, nextNoteNum int64, notes []note, now func() time.Time) (*Workspace, error) {
 	blob, err := encodeNotes(notes)
 	if err != nil {
 		return nil, err
@@ -127,7 +126,7 @@ func saveWorkspace(ctx context.Context, client *datastore.Client, name string, n
 	var w *Workspace
 	// ndb.transaction(retries=5) makes up to 6 attempts.
 	_, err = client.RunInTransaction(ctx, func(tx *datastore.Transaction) error {
-		now := time.Now().UTC().Truncate(time.Second)
+		now := now().UTC().Truncate(time.Second)
 		w = &Workspace{Key: workspaceKey(name)}
 		err := ignoreFieldMismatch(tx.Get(w.Key, w))
 		if errors.Is(err, datastore.ErrNoSuchEntity) {
@@ -186,48 +185,14 @@ func notesJSON(notes []note) []byte {
 			if j > 0 {
 				b.WriteByte(',')
 			}
-			writePyJSONString(&b, p.Key)
+			writePyJSONString(&b, []rune(p.Key))
 			b.WriteByte(':')
-			writePyJSONString(&b, p.Value)
+			writePyJSONString(&b, []rune(p.Value))
 		}
 		b.WriteByte('}')
 	}
 	b.WriteByte(']')
 	return []byte(b.String())
-}
-
-// writePyJSONString writes s as a JSON string the way Python's json.dumps()
-// does with ensure_ascii: everything outside ' '-'~' is escaped, as \uXXXX
-// UTF-16 code units in lowercase hex unless it has a short escape.
-func writePyJSONString(b *strings.Builder, s string) {
-	b.WriteByte('"')
-	for _, r := range s {
-		switch r {
-		case '"':
-			b.WriteString(`\"`)
-		case '\\':
-			b.WriteString(`\\`)
-		case '\n':
-			b.WriteString(`\n`)
-		case '\r':
-			b.WriteString(`\r`)
-		case '\t':
-			b.WriteString(`\t`)
-		case '\b':
-			b.WriteString(`\b`)
-		case '\f':
-			b.WriteString(`\f`)
-		default:
-			if r >= ' ' && r <= '~' {
-				b.WriteRune(r)
-				continue
-			}
-			for _, unit := range utf16.Encode([]rune{r}) {
-				fmt.Fprintf(b, `\u%04x`, unit)
-			}
-		}
-	}
-	b.WriteByte('"')
 }
 
 var errNotesNotJSON = errors.New("notesJsonArray isn't JSON")

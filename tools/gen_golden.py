@@ -24,6 +24,7 @@ from google.appengine.ext import testbed
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import models  # noqa: E402
+import golden_http  # noqa: E402
 
 TESTDATA = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'testdata')
@@ -225,7 +226,7 @@ def notes_blob_cases():
                 workspace = models.Workspace.create('w%d' % i, 1, time)
                 workspace.put()
                 if meaning22:
-                    key = put_compressed_notes(workspace, time, blob)
+                    key = put_compressed_notes(workspace.key, time, blob)
                 else:
                     entity = datastore.Entity('Notes')
                     entity['workspaceKey'] = workspace.key.to_old_key()
@@ -247,14 +248,14 @@ def notes_blob_cases():
     return cases
 
 
-def put_compressed_notes(workspace, time, blob):
+def put_compressed_notes(workspace_key, time, blob):
     """Puts a Notes entity whose notesJsonArray is blob, marked the way ndb
     marks a compressed JsonProperty (meaning 22 in the Cloud Datastore API).
 
     Putting through the model would decompress, parse and re-serialize the
     value, so this patches the entity's protobuf instead.
     """
-    pb = models.Notes(workspaceKey=workspace.key, time=time,
+    pb = models.Notes(workspaceKey=workspace_key, time=time,
                       notesJsonArray=[])._to_pb()
     for prop in pb.raw_property:
         if prop.name == 'notesJsonArray':
@@ -315,6 +316,7 @@ def main():
     write('localtime.json', localtime_cases())
     write('notes_encoding.json', notes_encoding_cases())
     write('notes_blobs.json', notes_blob_cases())
+    write('http.json', golden_http.http_cases())
 
 
 if __name__ == '__main__':

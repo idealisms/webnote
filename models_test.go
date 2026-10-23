@@ -207,7 +207,7 @@ func TestSaveWorkspace(t *testing.T) {
 	ctx, client := newTestClient(t)
 	before := time.Now().UTC().Truncate(time.Second)
 	notes := []note{{{"id", "note0"}, {"text", "hello"}}}
-	w, err := saveWorkspace(ctx, client, "my-notes", 2, notes)
+	w, err := saveWorkspace(ctx, client, "my-notes", 2, notes, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestSaveWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(time.Until(w.Time.Add(time.Second)))
-	w2, err := saveWorkspace(ctx, client, "my-notes", 5, nil)
+	w2, err := saveWorkspace(ctx, client, "my-notes", 5, nil, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestSaveWorkspace(t *testing.T) {
 // models_test.py).
 func TestNotesStorageFormat(t *testing.T) {
 	ctx, client := newTestClient(t)
-	w, err := saveWorkspace(ctx, client, "ws", 1, []note{{{"id", "note0"}, {"xPos", "10"}, {"text", "café"}}})
+	w, err := saveWorkspace(ctx, client, "ws", 1, []note{{{"id", "note0"}, {"xPos", "10"}, {"text", "café"}}}, time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

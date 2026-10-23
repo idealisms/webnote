@@ -3,8 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -12,6 +15,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"cloud.google.com/go/datastore"
 )
@@ -29,6 +33,8 @@ func TestMain(m *testing.M) {
 }
 
 func runWithEmulator(m *testing.M) int {
+	// Handlers log expected errors; tests that check logs install their own.
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	emulatorHost = os.Getenv("DATASTORE_EMULATOR_HOST")
 	if emulatorHost == "" {
 		cmd, host, err := startEmulator()
@@ -77,11 +83,7 @@ func newTestClient(t *testing.T) (context.Context, *datastore.Client) {
 	if emulatorHost == "" {
 		t.Skip("needs the Datastore emulator")
 	}
-	resp, err := http.Post("http://"+emulatorHost+"/reset", "", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
+	emulatorReset(t)
 	ctx := context.Background()
 	client, err := datastore.NewClient(ctx, testProject)
 	if err != nil {
@@ -90,6 +92,20 @@ func newTestClient(t *testing.T) (context.Context, *datastore.Client) {
 	t.Cleanup(func() { client.Close() })
 	return ctx, client
 }
+
+// emulatorReset empties the emulator's datastore.
+func emulatorReset(t *testing.T) {
+	t.Helper()
+	resp, err := http.Post("http://"+emulatorHost+"/reset", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+}
+
+func utf8Valid(b []byte) bool { return utf8.Valid(b) }
+
+func base64Std(b []byte) string { return base64.StdEncoding.EncodeToString(b) }
 
 // emulatorAPI calls the emulator's Cloud Datastore REST API, which can do
 // things the Go client can't: write meaning 22, and show the raw format.
