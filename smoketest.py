@@ -144,6 +144,9 @@ def check_save_and_load(base, name):
 
     run_id = time.strftime('%Y%m%dT%H%M%S')
     first_text = 'smoke test %s first' % run_id
+    # Revisions are keyed by the second, so don't share one with a save made
+    # just before this run (e.g. by browsertest.py).
+    time.sleep(1.1)
     second_text = 'smoke test %s second' % run_id
     first_time = save(base, name, first_text)
     time.sleep(1.5)  # Revisions are keyed by the second.

@@ -10,8 +10,10 @@ which isn't in requirements-dev.txt.
 
 For each workspace, each browser loads it from the home page's form, creates a
 note, edits and saves it twice, reloads, loads the older revision from the
-history list, and runs the collision check. The browsers run one after the
-other on the same workspaces, and each must see what the previous one saved:
+history list, and runs the collision check. Then it closes its note and saves,
+so the latest revision has the notes it started with (smoketest.py only saves to
+a workspace whose latest revision is its own note). The browsers run one after
+the other on the same workspaces, and each must see what the previous one left:
 names are escaped the same way in every browser. Any alert or JavaScript error
 fails the test.
 
@@ -58,9 +60,13 @@ def edit_and_save(page, note_id, text):
     return page.evaluate('workspace.loadedTime')
 
 
+def note_texts(page):
+    return sorted(page.evaluate('Object.values(workspace.notes).map(n => n.text)'))
+
+
 def run(browser, base, name, previous):
-    """Runs the client on one workspace. previous is the last note text saved
-    to it by another browser, or None. Returns the text this run saved."""
+    """Runs the client on one workspace. previous is the sorted note texts
+    another browser left, or None. Returns the note texts this run left."""
     page = browser.new_page()
     problems = []
     def on_dialog(dialog):
@@ -78,10 +84,11 @@ def run(browser, base, name, previous):
     page.click('input[value=load]')
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
     check(page.evaluate('workspace.name') == name, 'home page form opens the workspace')
+    workspace_page = page.url
 
-    texts = page.evaluate('Object.values(workspace.notes).map(n => n.text)')
+    start_texts = note_texts(page)
     if previous is not None:
-        check(previous in texts, 'sees the note the previous browser saved')
+        check(start_texts == previous, 'sees the notes the previous browser left')
 
     page.click('#newImg')
     note_id = page.evaluate("'note' + (workspace.nextNoteNum - 1)")
@@ -101,7 +108,6 @@ def run(browser, base, name, previous):
     time.sleep(1.1)  # Revisions are keyed by the second.
     second = TEXT % (run_id + ' second')
     second_time = edit_and_save(page, note_id, second)
-    second_text = page.evaluate('workspace.notes[%r].text' % note_id)
     check(second_time > first_time, 'second save is newer')
 
     # The collision check (getrecent.py) must agree with the save time.
@@ -123,10 +129,25 @@ def run(browser, base, name, previous):
     check(page.evaluate('workspace.notes[%r] && workspace.notes[%r].text' % (note_id, note_id))
           == first_text, 'load.py shows the older revision')
 
+    # Clean up: close the note and save, back to the notes we started with.
+    page.goto(workspace_page)
+    page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
+    check(page.evaluate('workspace.loadedTime') == second_time, 'reopens the latest revision')
+    page.dblclick('#' + note_id)
+    page.click('#%s img[src="images/close.gif"]' % note_id)
+    page.wait_for_function("get('saveImg').className == 'controls'")
+    page.click('#saveImg')
+    wait_for_save(page)
+    time.sleep(1.1)  # So the next run's saves get a second of their own.
+    page.reload()
+    page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
+    end_texts = note_texts(page)
+    check(end_texts == start_texts, 'cleanup leaves the notes it started with')
+
     check(not problems, 'no alerts or JavaScript errors%s' % (
         '' if not problems else ': %s' % problems))
     page.close()
-    return second_text
+    return end_texts
 
 
 def main():
