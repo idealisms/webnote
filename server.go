@@ -40,7 +40,16 @@ func main() {
 	}
 	s := &server{client: client, now: time.Now, save: saveWorkspace,
 		project: os.Getenv("GOOGLE_CLOUD_PROJECT")}
-	if err := http.ListenAndServe(":"+port, s); err != nil {
+	var handler http.Handler = s
+	if os.Getenv("WEBNOTE_SERVE_STATIC") == "1" {
+		static, err := readStaticHandlers("app-go.yaml")
+		if err != nil {
+			slog.Error("readStaticHandlers", "error", err)
+			os.Exit(1)
+		}
+		handler = withStaticFiles(static, s)
+	}
+	if err := http.ListenAndServe(":"+port, handler); err != nil {
 		slog.Error("ListenAndServe", "error", err)
 		os.Exit(1)
 	}
