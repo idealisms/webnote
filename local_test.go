@@ -8,7 +8,7 @@ import (
 )
 
 func TestStaticFilesFromAppYAML(t *testing.T) {
-	handlers, err := readStaticHandlers("app-go.yaml")
+	handlers, err := readStaticHandlers("app.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

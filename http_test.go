@@ -21,7 +21,9 @@ import (
 	"cloud.google.com/go/datastore"
 )
 
-// httpGolden is testdata/http.json, written by tools/golden_http.py.
+// httpGolden is testdata/http.json, written by tools/golden_http.py running the
+// Python app (git show 85a04b5:tools/golden_http.py). The Python app has been
+// removed, so the file is fixed: record intended changes in fixedSincePython.
 type httpGolden struct {
 	SaveNow string `json:"save_now"`
 	Seed    struct {

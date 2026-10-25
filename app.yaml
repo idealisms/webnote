@@ -1,12 +1,8 @@
-runtime: python311
+# Webnote (see server.go). Deploy with ./deploy.sh.
+runtime: go127
 
 automatic_scaling:
   max_instances: 1
-
-app_engine_apis: true
-
-env_variables:
-  NDB_USE_CROSS_COMPATIBLE_PICKLE_PROTOCOL: 'True'
 
 handlers:
 - url: /webnote/
@@ -40,9 +36,5 @@ handlers:
 - url: /webnote/images
   static_dir: images
 
-- url: /admin/.*
-  script: google.appengine.ext.admin.application
-  login: admin
-
 - url: /.*
-  script: main.app
+  script: auto

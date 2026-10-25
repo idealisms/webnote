@@ -1,7 +1,7 @@
 package main
 
 // Serving static files when running locally (WEBNOTE_SERVE_STATIC=1, see
-// run_local_go.sh). On App Engine, app-go.yaml's handlers serve them before
+// run_local.sh). On App Engine, app.yaml's handlers serve them before
 // requests reach the app; this reads the same handlers.
 
 import (

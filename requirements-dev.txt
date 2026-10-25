@@ -1,4 +1,4 @@
--r requirements.txt
+# For the tools in tools/. The scripts in the repo root need only the standard
+# library, except browsertest.py (Playwright; see the script).
+google-cloud-datastore==2.13.2
 rsa==4.9.1
-WebTest==3.0.7
-coverage==7.16.2

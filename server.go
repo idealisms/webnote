@@ -43,7 +43,7 @@ func main() {
 		project: os.Getenv("GOOGLE_CLOUD_PROJECT"), version: os.Getenv("GAE_VERSION")}
 	var handler http.Handler = s
 	if os.Getenv("WEBNOTE_SERVE_STATIC") == "1" {
-		static, err := readStaticHandlers("app-go.yaml")
+		static, err := readStaticHandlers("app.yaml")
 		if err != nil {
 			slog.Error("readStaticHandlers", "error", err)
 			os.Exit(1)

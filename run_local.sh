@@ -1,6 +1,6 @@
 #!/bin/bash
 # Runs the Go version locally on http://localhost:${PORT:-8080}/webnote/, with
-# an in-memory Datastore emulator and the static files app-go.yaml serves.
+# an in-memory Datastore emulator and the static files app.yaml serves.
 # The data is gone when the script stops. Smoke-test it with:
 #   python smoketest.py http://localhost:8080 --max-wait 30
 set -euo pipefail

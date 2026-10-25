@@ -1,23 +1,20 @@
+# Files left out of deploys.
 *~
-*.pyc
-*.pyo
-*.egg-info
 *.sh
 *.cmd
 *.yaml
 **/RCS/
 .*
-env/
-*_test.py
 *.md
-smoketest.py
-migrations/
-difftest.py
-tools/
-*_datatest.py
-*.go
-go.mod
-go.sum
+# A local `go build`.
+/webnote
+# Tests and their data.
+*_test.go
 testdata/
-templates/workspace.gotmpl
-browsertest.py
+# Python tools and scripts.
+env/
+*.py
+*.pyc
+dataflow/
+tools/
+requirements*.txt

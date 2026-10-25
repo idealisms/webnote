@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-// readGolden reads [input, expected] pairs written by tools/gen_golden.py.
+// readGolden reads [input, expected] pairs written by tools/gen_golden.py from
+// the Python app (git show 85a04b5:tools/gen_golden.py).
 func readGolden(t *testing.T, name string) [][2]string {
 	t.Helper()
 	data, err := os.ReadFile("testdata/" + name)
