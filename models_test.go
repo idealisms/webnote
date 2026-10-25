@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"reflect"
@@ -282,12 +283,18 @@ func TestNotesStorageFormat(t *testing.T) {
 	if want := []string{"notesJsonArray", "time", "time_to_delete", "workspaceKey"}; !sameStrings(keys, want) {
 		t.Errorf("properties = %v, want %v", keys, want)
 	}
-	const stampLayout = "2006-01-02T15:04:05.999999Z"
-	stamp := w.Time.Format(stampLayout)
-	if got := props["time"]["timestampValue"]; got != stamp {
-		t.Errorf("time = %v, want %v", got, stamp)
+	// The emulator writes all six fraction digits (".339050Z").
+	stamp := func(name string) time.Time {
+		ts, err := time.Parse(time.RFC3339Nano, fmt.Sprint(props[name]["timestampValue"]))
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+		return ts
 	}
-	if got, want := props["time_to_delete"]["timestampValue"], w.Time.AddDate(0, 0, 730).Format(stampLayout); got != want {
+	if got := stamp("time"); !got.Equal(w.Time) {
+		t.Errorf("time = %v, want %v", got, w.Time)
+	}
+	if got, want := stamp("time_to_delete"), w.Time.AddDate(0, 0, 730); !got.Equal(want) {
 		t.Errorf("time_to_delete = %v, want %v", got, want)
 	}
 	path := props["workspaceKey"]["keyValue"].(map[string]any)["path"].([]any)[0].(map[string]any)
