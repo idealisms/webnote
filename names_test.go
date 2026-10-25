@@ -5,10 +5,13 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 	"testing"
+	"time"
 )
 
 // Documents how stored workspace names are normalized, like
@@ -109,10 +112,14 @@ func TestCanonicalWsNameMatchesJavaScript(t *testing.T) {
 	}
 }
 
-// Checks every stored workspace name, like names_datatest.py. Needs a dump of
-// the Workspace table (user data, not in the repo); see names_datatest.py.
+// storedNames reads a dump of the Workspace table (user data, not in the
+// repo), downloaded with:
+//
+//	TOKEN=$(gcloud auth print-access-token) python tools/dump_workspaces.py .data/workspaces.jsonl
+//
 // Failures report line numbers, not names.
-func TestStoredNames(t *testing.T) {
+func storedNames(t *testing.T) []struct{ Key, Name string } {
+	t.Helper()
 	f, err := os.Open(".data/workspaces.jsonl")
 	if os.IsNotExist(err) {
 		t.Skip("needs .data/workspaces.jsonl")
@@ -120,28 +127,105 @@ func TestStoredNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	escaped := regexp.MustCompile(`^([A-Za-z0-9_]|%[0-9A-F]{2}|%u[0-9A-F]{3,4})*$`)
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(nil, 1<<20)
-	n := 0
+	var names []struct{ Key, Name string }
 	for line := 1; scanner.Scan(); line++ {
 		var w struct{ Key, Name string }
 		if err := json.Unmarshal(scanner.Bytes(), &w); err != nil {
 			t.Fatalf("line %d: %v", line, err)
 		}
-		if canonicalWsName(w.Name) != w.Name {
-			t.Errorf("line %d: name isn't canonical", line)
-		}
-		if workspaceKeyID(w.Name) != w.Key {
-			t.Errorf("line %d: key isn't the SHA-1 of the name", line)
-		}
-		if !escaped.MatchString(w.Name) {
-			t.Errorf("line %d: name has unescaped characters", line)
-		}
-		n++
+		names = append(names, w)
 	}
 	if err := scanner.Err(); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("checked %d names", n)
+	return names
+}
+
+// Every stored name is canonical, keyed by its SHA-1, and made of
+// myescape() output: letters, digits, '_' and escapes.
+func TestStoredNames(t *testing.T) {
+	escaped := regexp.MustCompile(`^([A-Za-z0-9_]|%[0-9A-F]{2}|%u[0-9A-F]{3,4})*$`)
+	names := storedNames(t)
+	for i, w := range names {
+		if canonicalWsName(w.Name) != w.Name {
+			t.Errorf("line %d: name isn't canonical", i+1)
+		}
+		if workspaceKeyID(w.Name) != w.Key {
+			t.Errorf("line %d: key isn't the SHA-1 of the name", i+1)
+		}
+		if !escaped.MatchString(w.Name) {
+			t.Errorf("line %d: name has unescaped characters", i+1)
+		}
+	}
+	t.Logf("checked %d names", len(names))
+}
+
+// storedUnpaddedU matches myescape()'s unpadded escapes of U+0100-U+0FFF (%u5D9),
+// which the native unescape() can't decode, so these names don't survive
+// the page's unescape() and the next save's myescape(). Known and
+// pre-existing; see canonicalWsName().
+var storedUnpaddedU = regexp.MustCompile(`%u[0-9A-F]{3}([^0-9A-F]|$)`)
+
+// The page shows unescape(name), and the next save sends myescape() of the
+// shown name. That gives back the stored name, except for the known
+// unpadded %u names.
+func TestStoredNamesBrowserRoundTrip(t *testing.T) {
+	stored := storedNames(t)
+	names := make([]string, len(stored))
+	for i, w := range stored {
+		names[i] = w.Name
+	}
+	script := `
+		const vm = require('vm'), fs = require('fs');
+		const ctx = {};
+		vm.createContext(ctx);
+		vm.runInContext(fs.readFileSync('objects.js', 'utf8'), ctx);
+		const names = JSON.parse(fs.readFileSync(0, 'utf8'));
+		console.log(JSON.stringify(names.map(n => ctx.myescape(unescape(n)))));
+	`
+	var resaved []string
+	runNode(t, script, names, &resaved)
+	if len(resaved) != len(names) {
+		t.Fatalf("node returned %d names for %d", len(resaved), len(names))
+	}
+	changed := 0
+	for i, n := range names {
+		if resaved[i] != n {
+			changed++
+			if !storedUnpaddedU.MatchString(n) {
+				t.Errorf("line %d: name changes across a save", i+1)
+			}
+		}
+	}
+	t.Logf("%d names round-trip; %d known unpadded %%u names don't", len(names)-changed, changed)
+}
+
+// The client builds workspace URLs as escape(escape(storedName)). Stored
+// names only contain [A-Za-z0-9_%], so that just escapes '%' twice. The URL
+// must reach the stored name's page and feed.
+func TestStoredNamesRoute(t *testing.T) {
+	skipIfShort(t)
+	names := storedNames(t)
+	_, client := newTestClient(t)
+	s := newTestServer(client, time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC))
+	for i, w := range names {
+		if w.Name == "" {
+			// save.py accepted an empty name (one such workspace exists),
+			// but no URL can reach it: /webnote/ is the home page.
+			continue
+		}
+		path := "/webnote/" + strings.ReplaceAll(w.Name, "%", "%2525")
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if rec.Code != 200 || !strings.Contains(rec.Body.String(), "workspace.setName(unescape('"+w.Name+"'));") {
+			t.Errorf("line %d: page is a %d for another name", i+1, rec.Code)
+		}
+		rec = httptest.NewRecorder()
+		s.ServeHTTP(rec, httptest.NewRequest("GET", path+".xml", nil))
+		if rec.Code != 404 { // No such workspace in the emulator.
+			t.Errorf("line %d: feed is a %d", i+1, rec.Code)
+		}
+	}
 }

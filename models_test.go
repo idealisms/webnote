@@ -10,8 +10,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http/httptest"
 	"os"
+	"os/exec"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -439,10 +443,38 @@ func TestDecodeNotesMatchesPython(t *testing.T) {
 	}
 }
 
-// Checks a sample of real revisions, like notes_datatest.py. Needs
-// .data/notes_sample.jsonl (user data, not in the repo; see
-// notes_datatest.py). Failures report the record number, not note contents.
-func TestNotesSample(t *testing.T) {
+// skipIfShort skips a data test that takes more than a few seconds. deploy.sh
+// runs the tests with -short.
+func skipIfShort(t *testing.T) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("slow data test; run without -short")
+	}
+}
+
+// sampleRevision is a Notes entity from .data/notes_sample.jsonl, written by
+// tools/sample_notes.py.
+type sampleRevision struct {
+	line            int
+	Type            string
+	Indexed         bool
+	Meaning         *int
+	OtherProperties []string `json:"other_properties"`
+	ValueB64        string   `json:"value_b64"`
+	blob, json      []byte   // the stored blob, and its decompressed JSON
+}
+
+// loadNotesSample reads a sample of real revisions (user data, not in the
+// repo), downloaded with:
+//
+//	TOKEN=$(gcloud auth print-access-token) python tools/dump_workspaces.py .data/workspaces.jsonl
+//	TOKEN=$(gcloud auth print-access-token) python tools/sample_notes.py \
+//	    .data/workspaces.jsonl .data/notes_sample.jsonl
+//
+// Set NOTES_SAMPLE_LIMIT to read only the first N revisions. Failures report
+// the record number, not note contents.
+func loadNotesSample(t *testing.T) []sampleRevision {
+	t.Helper()
 	f, err := os.Open(".data/notes_sample.jsonl")
 	if os.IsNotExist(err) {
 		t.Skip("needs .data/notes_sample.jsonl")
@@ -450,47 +482,254 @@ func TestNotesSample(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
+	limit, _ := strconv.Atoi(os.Getenv("NOTES_SAMPLE_LIMIT"))
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(nil, 4<<20)
-	n, reencoded := 0, 0
-	for line := 1; scanner.Scan(); line++ {
-		var r struct {
-			ValueB64 string `json:"value_b64"`
-			Meaning  *int
-		}
+	var records []sampleRevision
+	for line := 1; scanner.Scan() && (limit == 0 || len(records) < limit); line++ {
+		r := sampleRevision{line: line}
 		if err := json.Unmarshal(scanner.Bytes(), &r); err != nil {
 			t.Fatalf("record %d: %v", line, err)
 		}
-		blob, err := base64.StdEncoding.DecodeString(r.ValueB64)
-		if err != nil {
+		if r.blob, err = base64.StdEncoding.DecodeString(r.ValueB64); err != nil {
 			t.Fatalf("record %d: %v", line, err)
 		}
-		want, err := zlibDecompress(blob)
-		if err != nil {
+		if r.json, err = zlibDecompress(r.blob); err != nil {
 			t.Fatalf("record %d: %v", line, err)
 		}
-		var got json.RawMessage
-		logged := countErrors(func() { got, err = decodeNotes(blob) })
-		if err != nil || logged > 0 || !bytes.Equal(got, want) {
-			t.Errorf("record %d: decodeNotes differs (error %v, %d logged)", line, err, logged)
-		}
-		// Revisions written by ndb: Go writes the same JSON for the same
-		// notes. (Older revisions came from older code.)
-		if r.Meaning != nil && *r.Meaning == 22 {
-			notes, err := orderedNotes(want)
-			if err != nil {
-				t.Errorf("record %d: %v", line, err)
-			} else if !bytes.Equal(notesJSON(notes), want) {
-				t.Errorf("record %d: notesJSON differs from ndb's", line)
-			}
-			reencoded++
-		}
-		n++
+		records = append(records, r)
 	}
 	if err := scanner.Err(); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("checked %d revisions, re-encoded %d", n, reencoded)
+	return records
+}
+
+// Every sampled revision is zlib-compressed JSON in an unindexed blob, and
+// decodes the same. Revisions written by ndb have meaning 22; revisions
+// saved before 2025-08-13 lost it when the dataflow job that added
+// time_to_delete rewrote them (they expire by ~2027-08).
+func TestNotesSample(t *testing.T) {
+	records := loadNotesSample(t)
+	reencoded := 0
+	for _, r := range records {
+		if r.Type != "bytes" || r.Indexed || r.Meaning != nil && *r.Meaning != 22 || len(r.OtherProperties) > 0 {
+			t.Errorf("record %d: stored as %s, indexed %v, meaning %v, other properties %v",
+				r.line, r.Type, r.Indexed, r.Meaning, r.OtherProperties)
+		}
+		var got json.RawMessage
+		var err error
+		logged := countErrors(func() { got, err = decodeNotes(r.blob) })
+		if err != nil || logged > 0 || !bytes.Equal(got, r.json) {
+			t.Errorf("record %d: decodeNotes differs (error %v, %d logged)", r.line, err, logged)
+		}
+		// Revisions written by ndb: Go writes the same JSON for the same
+		// notes. (Older revisions came from older code.)
+		if r.Meaning != nil && *r.Meaning == 22 {
+			notes, err := orderedNotes(r.json)
+			if err != nil {
+				t.Errorf("record %d: %v", r.line, err)
+			} else if !bytes.Equal(notesJSON(notes), r.json) {
+				t.Errorf("record %d: notesJSON differs from ndb's", r.line)
+			}
+			reencoded++
+		}
+	}
+	t.Logf("checked %d revisions, re-encoded %d", len(records), reencoded)
+}
+
+// Every sampled note is an object of strings with the client's keys and an
+// id. Attribute values go into the save XML unescaped, so none may contain
+// quotes or markup.
+func TestNotesSampleShape(t *testing.T) {
+	for _, r := range loadNotesSample(t) {
+		var notes []map[string]any
+		if err := json.Unmarshal(r.json, &notes); err != nil || notes == nil {
+			t.Errorf("record %d: not a list of objects (%v)", r.line, err)
+			continue
+		}
+		for i, n := range notes {
+			if _, ok := n["id"]; !ok {
+				t.Errorf("record %d, note %d: no id", r.line, i)
+			}
+			for k, v := range n {
+				s, ok := v.(string)
+				if _, known := noteAttrXML[k]; !ok || !known && k != "text" {
+					t.Errorf("record %d, note %d: unexpected key or non-string value (%q)", r.line, i, k)
+				} else if k != "text" && strings.ContainsAny(s, `'"<>&`) {
+					t.Errorf("record %d, note %d: %s has quotes or markup", r.line, i, k)
+				}
+			}
+		}
+	}
+}
+
+// noteAttrXML maps note keys to the save XML's attribute names.
+var noteAttrXML = func() map[string]string {
+	m := map[string]string{}
+	for xmlName, key := range noteAttrKeys {
+		m[key] = xmlName
+	}
+	return m
+}()
+
+// jsResaveTexts returns escape(unescape(text)) for each text, as the client
+// computes it: the page shows unescape(text), and the next save sends
+// escape() of the shown text.
+func jsResaveTexts(t *testing.T, texts []string) []string {
+	t.Helper()
+	script := `
+		const fs = require('fs');
+		const texts = JSON.parse(fs.readFileSync(0, 'utf8'));
+		console.log(JSON.stringify(texts.map(t => escape(unescape(t)))));
+	`
+	var out []string
+	runNode(t, script, texts, &out)
+	if len(out) != len(texts) {
+		t.Fatalf("node returned %d texts for %d", len(out), len(texts))
+	}
+	return out
+}
+
+// runNode runs a node script with in as JSON on stdin, and decodes its
+// stdout as JSON into out.
+func runNode(t *testing.T, script string, in, out any) {
+	t.Helper()
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("needs node")
+	}
+	input, err := json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("node", "-e", script)
+	cmd.Stdin = bytes.NewReader(input)
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(output, out); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// What the user sees (unescape(text)) doesn't change across a save.
+func TestNotesSampleResaveKeepsShownText(t *testing.T) {
+	skipIfShort(t)
+	var texts []string
+	for _, r := range loadNotesSample(t) {
+		notes, err := orderedNotes(r.json)
+		if err != nil {
+			t.Fatalf("record %d: %v", r.line, err)
+		}
+		for _, n := range notes {
+			for _, p := range n {
+				if p.Key == "text" {
+					texts = append(texts, p.Value)
+				}
+			}
+		}
+	}
+	script := `
+		const fs = require('fs');
+		const texts = JSON.parse(fs.readFileSync(0, 'utf8'));
+		console.log(JSON.stringify(texts.filter(
+			t => unescape(escape(unescape(t))) !== unescape(t)).length));
+	`
+	var changed int
+	runNode(t, script, texts, &changed)
+	if changed != 0 {
+		t.Errorf("%d of %d texts show differently after a save", changed, len(texts))
+	}
+}
+
+// Each sampled revision, saved the way webnote.js saves it, is stored and
+// shown on the page as the client sent it.
+func TestNotesSampleSaveRoundTrip(t *testing.T) {
+	skipIfShort(t)
+	records := loadNotesSample(t)
+	var all [][]note
+	var texts []string
+	for _, r := range records {
+		notes, err := orderedNotes(r.json)
+		if err != nil {
+			t.Fatalf("record %d: %v", r.line, err)
+		}
+		all = append(all, notes)
+		for _, n := range notes {
+			texts = append(texts, noteText(n))
+		}
+	}
+	resaved := jsResaveTexts(t, texts)
+
+	ctx, client := newTestClient(t)
+	s := newTestServer(client, time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC))
+	do := func(method, path, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, httptest.NewRequest(method, path, strings.NewReader(body)))
+		return rec
+	}
+	notesOnPage := regexp.MustCompile(`(?s)var notes = (.*);\n  for \(var n in notes\)`)
+	for i, r := range records {
+		if i%100 == 0 {
+			emulatorReset(t) // The emulator slows down as it fills.
+		}
+		expected := []map[string]string{}
+		var xmlBody strings.Builder
+		name := fmt.Sprintf("w%d", i)
+		fmt.Fprintf(&xmlBody, "<workspace name='%s' nextNoteNum='1'>\n", name)
+		for _, n := range all[i] {
+			e := map[string]string{}
+			var attrs []string
+			for _, p := range n {
+				if p.Key == "text" {
+					continue
+				}
+				e[p.Key] = p.Value
+				attrs = append(attrs, fmt.Sprintf("%s='%s'", noteAttrXML[p.Key], p.Value))
+			}
+			text := resaved[0]
+			resaved = resaved[1:]
+			e["text"] = text
+			fmt.Fprintf(&xmlBody, "<note %s>\n%s\n</note>\n", strings.Join(attrs, " "), text)
+			expected = append(expected, e)
+		}
+		xmlBody.WriteString("</workspace>")
+		if rec := do("POST", "/webnote/save.py", xmlBody.String()); rec.Code != 200 {
+			t.Errorf("record %d: save returned %d", r.line, rec.Code)
+			continue
+		}
+
+		ws, err := getWorkspace(ctx, client, name)
+		if err != nil || ws == nil {
+			t.Fatalf("record %d: workspace %v, %v", r.line, ws, err)
+		}
+		stored, err := ws.notesList(ctx, client, "")
+		if err != nil {
+			t.Fatalf("record %d: %v", r.line, err)
+		}
+		var got []map[string]string
+		if err := json.Unmarshal(stored, &got); err != nil || !reflect.DeepEqual(got, expected) {
+			t.Errorf("record %d: stored notes differ from the save (%v)", r.line, err)
+		}
+
+		m := notesOnPage.FindStringSubmatch(do("GET", "/webnote/"+name, "").Body.String())
+		got = nil
+		if m == nil || json.Unmarshal([]byte(m[1]), &got) != nil || !reflect.DeepEqual(got, expected) {
+			t.Errorf("record %d: page notes differ from the save", r.line)
+		}
+	}
+	t.Logf("saved and loaded %d revisions", len(records))
+}
+
+// noteText is a note's text, or "" if it has none.
+func noteText(n note) string {
+	for _, p := range n {
+		if p.Key == "text" {
+			return p.Value
+		}
+	}
+	return ""
 }
 
 // orderedNotes parses a JSON array of objects with string values, keeping
