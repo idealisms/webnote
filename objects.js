@@ -311,7 +311,7 @@ function isEsc(s)
             || (s >=97 && s <=122) || s == 95);
 }
 /**
- * myescape and myunescape are provided for safari compatability.
+ * myescape is provided for safari compatability.
  * In reality, I should be using encodeURIComponent for everything, but
  * since information in the db is already in this form, we'll keep it
  * in this form.
@@ -327,36 +327,6 @@ function myescape(s)
       if (hex.length > 2)
         hex = 'u' + hex;
       ret += '%' + hex;
-    }
-    else
-      ret += s[i];
-  }
-  return ret;
-}
-
-/**
- * myescape and myunescape are provided for safari compatability.
- * In reality, I should be using encodeURIComponent for everything, but
- * since information in the db is already in this form, we'll keep it
- * in this form.
- */
-function myunescape(s)
-{
-  var ret = "";
-  for (var i = 0; i < s.length; i++)
-  {
-    if ('%' == s[i])
-    {
-      if (s.length > i+5 && s[i+1] == 'u')
-      {
-        ret += String.fromCharCode(hex2dec(s.substr(i+2, i+6)));
-        i += 5;
-      }
-      else if (s.length > i+2)
-      {
-        ret += String.fromCharCode(hex2dec(s.substr(i+1, i+3)));
-        i += 2;
-      }
     }
     else
       ret += s[i];

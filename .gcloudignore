@@ -10,6 +10,7 @@
 /webnote
 # Tests and their data.
 *_test.go
+*_test.js
 testdata/
 # Python tools and scripts.
 env/

@@ -499,19 +499,7 @@ Note.prototype.toXML = function()
  */
 Note.prototype.setText = function(str)
 {
-  // convert characters from 160-255 to html codepoints (this provides
-  // Safari compatability
-  var chars = [];
-  var i;
-  for (i = 0; i < str.length; i++)
-  {
-    var c = str.charCodeAt(i);
-    if (c >= 160 && c <= 255)
-      chars.push("&#" + c + ";");
-    else
-      chars.push(str.charAt(i));
-  }
-  str = chars.join('');
+  str = charRefs(str);
 
   if (str != this.text)
   {
@@ -523,7 +511,7 @@ Note.prototype.setText = function(str)
 
   // make images undraggable
   var imgs = elt.getElementsByTagName('img');
-  for (i = 0; i < imgs.length; i++) {
+  for (var i = 0; i < imgs.length; i++) {
     imgs[i].addEventListener('mousedown', preventDefault);
   }
 
@@ -1767,6 +1755,18 @@ function stopPropagation(e) {
 
 function preventDefault(e) {
   e.preventDefault();
+}
+
+/**
+ * Convert characters 160-255 to character references, which is how note
+ * text is stored (this was for Safari compatibility).
+ * @param {string} str
+ * @type string
+ */
+function charRefs(str) {
+  return str.replace(/[\u00a0-\u00ff]/g, function(c) {
+    return '&#' + c.charCodeAt(0) + ';';
+  });
 }
 
 /**
