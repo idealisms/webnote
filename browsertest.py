@@ -201,6 +201,14 @@ def redo(page):
     page.click('#redoImg')
 
 
+def dblclick_in_front(page, note_id):
+    """Brings a note to the front with its mini note, then double clicks it
+    away from the corner where selecting it shows its id."""
+    page.click('#m' + note_id)
+    box = page.locator('#' + note_id).bounding_box()
+    page.mouse.dblclick(box['x'] + box['width'] - 20, box['y'] + box['height'] - 20)
+
+
 def new_note(page):
     page.click('#newImg')
     return page.evaluate("'note' + (workspace.nextNoteNum - 1)")
@@ -213,16 +221,25 @@ def run_ui(browser, base, name):
     warning."""
     page = browser.new_page(viewport={'width': 1280, 'height': 800})
     problems = []
+    dialogs = []  # (type, message) of every dialog
     def on_dialog(dialog):
+        dialogs.append((dialog.type, dialog.message))
         if dialog.type == 'beforeunload':
             dialog.accept()
         else:
-            problems.append('%s: %s' % (dialog.type, dialog.message))
             dialog.dismiss()
     page.on('dialog', on_dialog)
     page.on('pageerror', lambda e: problems.append('JavaScript error: %s' % e))
+    # Saves never reach the server: save_response says what they get.
     saves = []
-    page.route('**/save.py*', lambda route: (saves.append(route.request.url), route.abort()))
+    save_response = {}
+    def on_save(route):
+        saves.append(route.request.url)
+        if save_response:
+            route.fulfill(**save_response)
+        else:
+            route.abort()
+    page.route('**/save.py*', on_save)
 
     page.goto(base + '/webnote/' + urllib.parse.quote(urllib.parse.quote(name)))
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
@@ -350,9 +367,7 @@ def run_ui(browser, base, name):
 
     # Delete with the close icon; undo brings the note back with its text.
     page.evaluate('workspace.notes[%r].setText("kept text")' % b)
-    page.click('#m' + b)  # Bring it in front of the other note.
-    box = page.locator('#' + b).bounding_box()
-    page.mouse.dblclick(box['x'] + box['width'] - 20, box['y'] + box['height'] - 20)
+    dblclick_in_front(page, b)
     page.click('#%s img[src="images/close.gif"]' % b)
     check(page.evaluate("!get(%r) && !get('m' + %r) && !(%r in workspace.notes)" % (b, b, b)),
           'the close icon deletes the note')
@@ -383,6 +398,39 @@ def run_ui(browser, base, name):
         page.evaluate('t => workspace.notes[%r].setText(t)' % a, text)
         check(page.evaluate('get(%r).innerHTML' % a) == html, 'links in %r' % text)
 
+    # Only the note being edited lets its text be selected, and images in
+    # notes can't be dragged out.
+    selectable = ("(id => !get(id).dispatchEvent(new Event('selectstart',"
+                  " {bubbles: true, cancelable: true})))")
+    check(page.evaluate(selectable, a), 'a note blocks text selection')
+    dblclick_in_front(page, a)
+    check(not page.evaluate(selectable, a + 'text'), 'except while it is edited')
+    click_background(page)
+    page.evaluate('workspace.notes[%r].setText(\'<img src="images/new.gif">\')' % a)
+    check(page.evaluate("!document.querySelector('#%s img').dispatchEvent(new MouseEvent("
+                        "'mousedown', {bubbles: true, cancelable: true}))" % a),
+          'an image in a note can\'t be dragged')
+
+    # A failed save says so, and the workspace stays unsaved.
+    alert = page.evaluate('strings.SAVE_STATUS_ERROR')
+    server_alert = page.evaluate('strings.SAVE_SERVER_ERROR.replace("$1", adminEmail)')
+    for response, message, what in [
+            ({'status': 500, 'body': 'error'}, alert, 'a 500'),
+            ({}, alert, 'a network error'),
+            ({'status': 200, 'content_type': 'text/xml',
+              'body': '<?xml version="1.0"?><status value="error"/>'}, server_alert,
+             'an error from the server')]:
+        save_response.clear()
+        save_response.update(response)
+        del dialogs[:]
+        page.click('#saveImg')
+        page.wait_for_function("get('saveImg').src.indexOf('saving') < 0")
+        check(dialogs == [('alert', message)]
+              and page.evaluate("get('saveImg').className") == 'controls'
+              and page.evaluate('workspace.changed'),
+              'a save that gets %s alerts and stays unsaved' % what)
+    del dialogs[:]
+
     # Unsaved changes ask before leaving.
     check(bool(page.evaluate('winBeforeUnload()')), 'unsaved changes warn before leaving')
 
@@ -393,9 +441,12 @@ def run_ui(browser, base, name):
     page.wait_for_function("'updated' in workspace.notes")
     check(True, 'a newer save on the server shows the collision warning')
 
-    check(not saves, 'nothing was saved')
-    check(not problems, 'no alerts or JavaScript errors%s' % (
-        '' if not problems else ': %s' % problems))
+    check(len(saves) == 3, 'only the failed saves were tried')
+    check(not dialogs and not problems, 'no other alerts or JavaScript errors%s' % (
+        '' if not (dialogs or problems) else ': %s' % (dialogs + problems)))
+    page.goto(base + '/webnote/')
+    check([d[0] for d in dialogs] == ['beforeunload'],
+          'leaving with unsaved changes asks first')
     page.close()
 
 

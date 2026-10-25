@@ -90,7 +90,7 @@ function Note(note, p, text) {
   // create the mini note dom object
   var dotElt = document.createElement('div');
   dotElt.id = 'm' + this.id;
-  dotElt.onmousedown = hitch(this, this.miniMouseDown);
+  dotElt.addEventListener('mousedown', this.miniMouseDown.bind(this));
   get('mini').appendChild(dotElt);
 
   var dot = get('m' + this.id);
@@ -107,16 +107,17 @@ function Note(note, p, text) {
  * User clicked on a note.
  */
 Note.prototype.mouseDown = function(ev) {
-  ev = ev || window.event;
-  var target = ev.target || ev.srcElement;
-  if (!this.selectable)
-    return false;
+  var target = ev.target;
+  if (!this.selectable) {
+    ev.preventDefault();
+    return;
+  }
 
   // alt + rt click == send to back
-  // 2 is rt click in both IE and Mozilla
   if (ev.altKey && 2 == ev.button) {
     this.sendToBack();
-    return false;
+    ev.preventDefault();
+    return;
   }
 
   var lbutton = 0 == ev.button;
@@ -124,7 +125,7 @@ Note.prototype.mouseDown = function(ev) {
   // only the left button should have an event
   // likewise we can disable actions by using meta or ctrl+alt
   if (!lbutton || ev.metaKey || (ev.ctrlKey && ev.altKey))
-    return true;
+    return;
 
   // Determine if we're clicking on the note or a scrollbar
   var pos = findRelativeMousePos(ev);
@@ -135,13 +136,14 @@ Note.prototype.mouseDown = function(ev) {
        && pos.x < size.x - noteBorder) ||
       (pos.y > target.clientHeight + noteBorder
        && pos.y < size.y - noteBorder)) {
-    cancelBubble(ev);
+    // a scrollbar: let the browser scroll the note
+    ev.stopPropagation();
     return;
   }
 
   this.parent.mouse.select(this, ev);
-  cancelBubble(ev);
-  return false;
+  ev.stopPropagation();
+  ev.preventDefault();
 }
 
 /**
@@ -149,7 +151,6 @@ Note.prototype.mouseDown = function(ev) {
  */
 Note.prototype.miniMouseDown = function(ev)
 {
-  ev = ev || window.event;
   // bring all notes of the same color to the front
   if (ev.ctrlKey) {
     for (var n in this.parent.notes) {
@@ -194,7 +195,6 @@ Note.prototype.keyDown = function(ev)
  */
 Note.prototype.mouseMove = function(ev)
 {
-  ev = ev || window.event;
   var elt = get(this.id);
   if (!this.selectable)
   {
@@ -293,7 +293,6 @@ Note.prototype.mouseDblClick = function() {
   var elt = get(this.id);
   elt.innerHTML = html;
   elt.title = '';
-  elt.onselectstart = null;
   elt.style.overflow = 'hidden';
   get(this.id + 'text').focus();
   this.parent.edit = this;
@@ -511,7 +510,7 @@ Note.prototype.setText = function(str)
   // make images undraggable
   var imgs = elt.getElementsByTagName('img');
   for (i = 0; i < imgs.length; i++) {
-    imgs[i].onmousedown = retFalse;
+    imgs[i].addEventListener('mousedown', preventDefault);
   }
 
   elt.title = strings.NOTE_TOOLTIP;
@@ -1252,13 +1251,17 @@ var workspace =
     var nNote = new Note(elt, this, note.text);
     this.notes[nNote.id] = nNote;
 
-    newDiv.onmouseover = hitch(nNote, nNote.mouseOver);
-    newDiv.onmouseout = hitch(nNote, nNote.mouseOut);
-    newDiv.onmousedown = hitch(nNote, nNote.mouseDown);
-    newDiv.onmouseup = hitch(nNote, nNote.mouseUp);
-    newDiv.onmousemove = hitch(nNote, nNote.mouseMove);
-    newDiv.ondblclick = hitch(nNote, nNote.mouseDblClick);
-    newDiv.onselectstart = retFalse;
+    newDiv.addEventListener('mouseover', nNote.mouseOver.bind(nNote));
+    newDiv.addEventListener('mouseout', nNote.mouseOut.bind(nNote));
+    newDiv.addEventListener('mousedown', nNote.mouseDown.bind(nNote));
+    newDiv.addEventListener('mouseup', nNote.mouseUp.bind(nNote));
+    newDiv.addEventListener('mousemove', nNote.mouseMove.bind(nNote));
+    newDiv.addEventListener('dblclick', nNote.mouseDblClick.bind(nNote));
+    // only the text of the note being edited can be selected
+    newDiv.addEventListener('selectstart', function(ev) {
+      if (workspace.edit != nNote)
+        ev.preventDefault();
+    });
     newDiv.title = strings.NOTE_TOOLTIP;
 
     if (!skipFilter) {
@@ -1302,7 +1305,6 @@ var workspace =
     if (this.edit)
     {
       var textbox = get(this.edit.id + 'text');
-      textbox.parentNode.onselectstart = retFalse;
       if (BROWSER_SAFARI != browser) {
         textbox.parentNode.style.overflow = 'auto';
       }
@@ -1457,17 +1459,6 @@ var workspace =
     if (!offset)
       offset = 0;
 
-    var xmlhttp = getxmlreqobj();
-    xmlhttp.onreadystatechange = function() {
-        if (4 == xmlhttp.readyState && 200 == xmlhttp.status) {
-          workspace.loadlistCallback(xmlhttp, offset);
-        }
-        if (4 == xmlhttp.readyState) {
-          try { // break circular ref
-            xmlhttp.onreadystatechange = null;
-          } catch (e) { }
-        }
-    };
     this.createNote( {
       'id' : 'load',
       'height' : '130',
@@ -1478,13 +1469,18 @@ var workspace =
     this.notes['load'].setText(txt);
     this.reZOrder('load');
 
-    xmlhttp.open('GET', 'getdates.py?name=' + escape(myescape(this.name))
-                 + '&offset=' + offset + '&epoch=1', true);
-    xmlhttp.send('');
+    fetch('getdates.py?name=' + escape(myescape(this.name))
+          + '&offset=' + offset + '&epoch=1').then(function(response) {
+      if (200 == response.status) {
+        return response.text().then(function(text) {
+          workspace.loadlistCallback(text, offset);
+        });
+      }
+    }, function() {});
   },
 
-  loadlistCallback : function(xmlhttp, offset) {
-    var loadTimes = xmlhttp.responseText.split('|');
+  loadlistCallback : function(text, offset) {
+    var loadTimes = text.split('|');
     this.createNote( {
       'id': 'load',
       'height': '130',
@@ -1492,9 +1488,9 @@ var workspace =
       'bgcolor': '#ffff30'
     } );
     var txt;
-    db('resp: ' + xmlhttp.responseText.trim());
-    db('resplen: ' + xmlhttp.responseText.trim().length);
-    if (xmlhttp.responseText.trim() == '') {
+    db('resp: ' + text.trim());
+    db('resplen: ' + text.trim().length);
+    if (text.trim() == '') {
       txt = this.notes['load'].text + '\n' + strings.LOADVERSIONS_NONE;
     } else {
       txt = strings.LOADVERSIONS_ABOUT
@@ -1531,26 +1527,20 @@ var workspace =
    * the notes.
    */
   checkUpdated : function() {
-    var xmlhttp = getxmlreqobj();
-    xmlhttp.onreadystatechange = function() {
-        if (4 == xmlhttp.readyState && 200 == xmlhttp.status) {
+    fetch('getrecent.py?name=' + escape(myescape(workspace.name))
+          + '&epoch=1').then(function(response) {
+      if (200 == response.status) {
+        return response.text().then(function(text) {
           db('check updated');
-          workspace.checkUpdatedCallback(xmlhttp);
-        }
-        if (4 == xmlhttp.readyState) {
-          try { // break circular ref
-            xmlhttp.onreadystatechange = null;
-          } catch (e) { }
-        }
-    };
-    xmlhttp.open('GET', 'getrecent.py?name=' + escape(myescape(workspace.name))
-                 + '&epoch=1', true);
-    xmlhttp.send('');
+          workspace.checkUpdatedCallback(text);
+        });
+      }
+    }, function() {});
   },
 
-  checkUpdatedCallback : function(xmlhttp) {
+  checkUpdatedCallback : function(text) {
     // Times are microseconds since the epoch, exact in a JS number until 2255.
-    var loadTime = Number(xmlhttp.responseText.trim());
+    var loadTime = Number(text.trim());
     if (loadTime > this.loadedTime) {
       this.createNote( {
         'id' : 'updated',
@@ -1616,33 +1606,30 @@ var workspace =
     s.src = 'images/saving.gif';
     this.editOff();
 
-    var xmlhttp = getxmlreqobj();
-    xmlhttp.onreadystatechange = function() {
-        if (4 == xmlhttp.readyState && 200 == xmlhttp.status) {
-          workspace.saveCallback(xmlhttp);
-        } else if (4 == xmlhttp.readyState) {
-          db(xmlhttp.status);
-          alert(strings.SAVE_STATUS_ERROR);
-          get('saveImg').src = 'images/save.gif';
-        }
-        if (4 == xmlhttp.readyState) {
-          try { // break circular ref
-            xmlhttp.onreadystatechange = null;
-          } catch (e) { }
-        }
+    var failed = function(status) {
+      db(status);
+      alert(strings.SAVE_STATUS_ERROR);
+      get('saveImg').src = 'images/save.gif';
     };
-
-    xmlhttp.open('POST', 'save.py?epoch=1', true);
-    var savePayload = workspace.toString();
-    xmlhttp.send(savePayload);
+    fetch('save.py?epoch=1', {method: 'POST', body: workspace.toString()})
+        .then(function(response) {
+      if (200 != response.status) {
+        failed(response.status);
+        return;
+      }
+      return response.text().then(function(text) {
+        workspace.saveCallback(text);
+      });
+    }, function() { failed(0); });
   },
-  saveCallback : function(xmlhttp) {
-    var doc = xmlhttp.responseXML;
-    db("response: " + xmlhttp.responseText);
-    if (doc && 'ok' == doc.getElementsByTagName('status')[0].getAttribute('value')) {
+  saveCallback : function(text) {
+    var doc = new DOMParser().parseFromString(text, 'text/xml');
+    var status = doc.getElementsByTagName('status')[0];
+    db("response: " + text);
+    if (status && 'ok' == status.getAttribute('value')) {
       this.changed = false;
       get('saveImg').className = 'controlsDisabled';
-      this.loadedTime = Number(doc.getElementsByTagName('status')[0].getAttribute('update'));
+      this.loadedTime = Number(status.getAttribute('update'));
     } else {
       alert(strings.SAVE_SERVER_ERROR.replace("$1", adminEmail));
     }
@@ -1684,22 +1671,28 @@ function init()
 
 
   var toolbar = get('toolbar');
-  toolbar.onmousedown = cancelBubble;
+  toolbar.addEventListener('mousedown', stopPropagation);
   if (BROWSER_SAFARI == browser) {
     toolbar.style.width = '100%';
   }
 
   workspace.mouse.curPos = new Point();
-  document.onmousemove = docMouseMove;
-  document.onkeydown = docKeyDown;
-  get('content').onmousedown = docMouseDown;
-  document.onmouseup = docMouseUp;
+  document.addEventListener('mousemove', docMouseMove);
+  document.addEventListener('keydown', docKeyDown);
+  get('content').addEventListener('mousedown', docMouseDown);
+  document.addEventListener('mouseup', docMouseUp);
 
   /**
    * When the user navigates away, if there are changes, give the user a
    * chance to cancel.
    */
-  window.onbeforeunload = winBeforeUnload;
+  window.addEventListener('beforeunload', function(ev) {
+    var warning = winBeforeUnload();
+    if (warning) {
+      ev.preventDefault();
+      ev.returnValue = warning;
+    }
+  });
 
   // set tooltips to localized text
   get('newImg').title = strings.ICON_NEW_NOTE;
@@ -1715,14 +1708,16 @@ function init()
   window.setTimeout(workspace.checkUpdated, workspace.updateInterval);
 }
 
-function cancelBubble(e) {
-  e = e || window.event;
-  e.cancelBubble = true;
+function stopPropagation(e) {
+  e.stopPropagation();
+}
+
+function preventDefault(e) {
+  e.preventDefault();
 }
 // absolute mouse positions; modified from:
 // http://www.web-wise-wizard.com/javascript-tutorials/javascript-mouse-event-handlers.html
 function docMouseMove(e) {
-  e = e || window.event;
   workspace.mouse.update(e.pageX, e.pageY);
   workspace.docMove(e.pageX, e.pageY);
 }
@@ -1755,8 +1750,6 @@ function docKeyDown(ev) {
   // the keydown event only seems to be a document event so we
   // can't put the event on the div layer.  Instead, events
   // need to be passed to the note that is being hovered over.
-  if (!ev) ev = window.event;
-
   var key = String.fromCharCode(ev.keyCode);
   if (workspace.shortcuts && !workspace.edit) {
     // blah, I should turn this into a map

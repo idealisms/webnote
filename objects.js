@@ -14,19 +14,6 @@ var dec2hex = function(d)
   return ret;
 };
 
-var getxmlreqobj = function() {
-  return new XMLHttpRequest();
-};
-
-/**
- * Reduces the chance of a closure leaking memory by minimizing the scope.
- */
-var hitch = function(obj, meth) {
-  return function() { return meth.apply(obj, arguments); };
-}
-
-var retFalse = function() { return false; };
-
 /**
  * modified from http://www.quirksmode.org/js/findpos.html
  * to return a Point()
@@ -55,7 +42,7 @@ function findPos(obj)
  * Get the position of a mouse event relative to the event target.
  */
 function findRelativeMousePos(ev) {
-  var target = ev.target || ev.srcElement;
+  var target = ev.target;
   var targetPos = findPos(target);
   var pagePos = new Point(ev.pageX, ev.pageY);
   // Take content scroll into account since we use that instead of
