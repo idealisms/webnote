@@ -15,7 +15,6 @@ var notePadding = 5;
 var noteBorder = 3;
 var noteBorderColor = '#000';
 var miniWidth = 51;
-var exposeSize = "70";
 
 var adminEmail, baseURI, numDates;
 
@@ -1377,68 +1376,6 @@ var workspace =
   },
 
   /**
-   * This function acts as an "Expose`" like feature for the notes
-   * It sets all of the notes to relative positioning and then grabs
-   * the relative location, sets its "top" and "left" properties then
-   * resets the positioning to absolute. -sph
-   *
-   * original patch submitted by Sean Hannan
-   *
-   * This isn't quite ready for release.
-   */
-  expose : function() {
-    var n, style;
-    for (n in this.notes) { //loop through the notes
-      var note = this.notes[n];
-      var elt = get(note.id);  // get the div
-      style = elt.style; //get the note's style
-
-      // save old values
-      note.lastX = style.left;
-      note.lastY = style.top;
-      note.lastWidth = style.width;
-      note.lastHeight = style.height;
-
-      //Set the styles so that the notes nicely tile
-      style.position = 'relative';
-      style.margin = '5px';
-      style.left = '';
-      style.top = '';
-      style.cssFloat = 'left';
-      style.display = '';
-      style.width = parseInt(exposeSize / 100.0 * parseInt(style.width)) + 'px';
-      style.height = parseInt(exposeSize / 100.0 * parseInt(style.height)) + 'px';
-      style.fontSize = exposeSize + '%';
-
-      //get and set the position of the div
-      var pos = findPos(elt);
-      style.left = pos.x + 'px';
-      style.top = pos.y + 'px';
-    }
-    //loop through again to make it absolute.
-    for (n in this.notes) {
-      style = get(this.notes[n].id).style;
-      style.position = 'absolute';
-      style.cssFloat = 'none';
-      style.margin = '';
-    }
-  },
-
-  _expose : function() {
-    for (var n in this.notes) {  //loop through notes
-      var note = this.notes[n];
-      var style = get(note.id).style; //get the Div
-
-      // restore values
-      style.top = note.lastY;
-      style.left = note.lastX;
-      style.width = note.lastWidth;
-      style.height = note.lastHeight;
-      style.fontSize = '100%';
-    }
-  },
-
-  /**
    * Filter the visible notes (kind of like a search).  Notes that match
    * the regular expression are moved to the front while other notes are
    * disabled and become mostly transparent.
@@ -1862,15 +1799,6 @@ function docKeyDown(ev) {
       n = workspace.notes[workspace.topId];
       n.keyDown(ev);
     }
-    /* //not ready yet
-    else if ('E' == key) {
-      workspace.expose();
-      // swap the functionality with the undo effect
-      var tmp = workspace.expose;
-      workspace.expose = workspace._expose;
-      workspace._expose = tmp;
-    }
-    */
   } else if (workspace.shortcuts) { // in edit mode
     if (27 == ev.keyCode) { // Esc
       workspace.editOff();
