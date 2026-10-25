@@ -270,28 +270,42 @@ Note.prototype.mouseDblClick = function() {
   var pSize = this.getCorrectedSize();
   pSize.x -= 2 * (noteBorder + notePadding + 1);
   pSize.y -= 2 * (noteBorder + notePadding + 1) + 20;
-  var html = "<div style='text-align:right;margin: 0 2px 1px 0;'>"
+  var bar = document.createElement('div');
+  bar.style.textAlign = 'right';
+  bar.style.margin = '0 2px 1px 0';
 
   // color swatches here
-  for (var c in bgColors) {
-    var tooltip = strings.COLOR_SWATCH_TOOLTIP.replace('$1', parseInt(c, 10) + 1);
-    html += "<div style='width: 12px;height:12px;font-size:1px;float:left;background: "
-          + bgColors[c] + ";border: 1px #000 solid; margin:0 1px 1px 0;cursor:auto;' "
-          + "onmousedown='workspace.notes." + this.id
-          + ".setColor(\"" + bgColors[c] + "\");event.cancelBubble=true;' title='"
-          + tooltip + "'></div>";
-  }
+  bgColors.forEach(function(color, i) {
+    var swatch = document.createElement('div');
+    swatch.style.cssText = 'width: 12px;height:12px;font-size:1px;float:left;'
+        + 'border: 1px #000 solid; margin:0 1px 1px 0;cursor:auto;';
+    swatch.style.background = color;
+    swatch.title = strings.COLOR_SWATCH_TOOLTIP.replace('$1', i + 1);
+    swatch.addEventListener('mousedown', function(ev) {
+      this.setColor(color);
+      ev.stopPropagation();
+    }.bind(this));
+    bar.appendChild(swatch);
+  }, this);
 
-  html += "<img onclick='workspace.notes." + this.id
-        + ".destroy(true);' src='images/close.gif' alt='" + strings.CLOSE_ICON_ALT + "'"
-        + " title='" + strings.CLOSE_ICON_TOOLTIP + "'"
-        + " style='cursor:auto;border:0;height:12px;width:12px;' />"
-        + "</div><textarea wrap='virtual' id='"
-        + this.id + "text' style='width:" + pSize.x
-        + "px;height:" + pSize.y + "px' onmousedown='event.cancelBubble=true;' ondblclick='event.cancelBubble=true;'>"
-        + this.text.replace(/>/g, '&gt;').replace(/</g, '&lt;') + '</textarea>';
+  var close = document.createElement('img');
+  close.src = 'images/close.gif';
+  close.alt = strings.CLOSE_ICON_ALT;
+  close.title = strings.CLOSE_ICON_TOOLTIP;
+  close.style.cssText = 'cursor:auto;border:0;height:12px;width:12px;';
+  close.addEventListener('click', this.destroy.bind(this, true));
+  bar.appendChild(close);
+
+  var textbox = document.createElement('textarea');
+  textbox.id = this.id + 'text';
+  textbox.style.width = pSize.x + 'px';
+  textbox.style.height = pSize.y + 'px';
+  textbox.addEventListener('mousedown', stopPropagation);
+  textbox.addEventListener('dblclick', stopPropagation);
+  textbox.value = decodeCharRefs(this.text);
+
   var elt = get(this.id);
-  elt.innerHTML = html;
+  elt.replaceChildren(bar, textbox);
   elt.title = '';
   elt.style.overflow = 'hidden';
   get(this.id + 'text').focus();
@@ -557,7 +571,7 @@ Note.prototype.select = function()
                                    .hsvadj(0, 0, -0.1);
   // make a new layer with the name
   var d = document.createElement('div');
-  d.innerHTML = this.id;
+  d.textContent = this.id;
   d.style.position = 'absolute';
   d.style.top = (parseInt(elt.style.top) + 5) + 'px';
   d.style.left = (parseInt(elt.style.left) + 5) + 'px';
@@ -1373,8 +1387,7 @@ var workspace =
   setName : function(n)
   {
     this.name = n;
-    var elt = get('wsname');
-    elt.innerHTML = this.name;
+    get('wsname').textContent = this.name;
   },
 
   /**
@@ -1487,38 +1500,59 @@ var workspace =
       'width': '270',
       'bgcolor': '#ffff30'
     } );
-    var txt;
+    var note = this.notes['load'];
     db('resp: ' + text.trim());
     db('resplen: ' + text.trim().length);
     if (text.trim() == '') {
-      txt = this.notes['load'].text + '\n' + strings.LOADVERSIONS_NONE;
-    } else {
-      txt = strings.LOADVERSIONS_ABOUT
-            + '<div style="text-align: center;"><form method="GET" action="load.py" onmousedown="event.cancelBubble=true;">'
-            + '<input type="hidden" name="name" value="'
-            + myescape(this.name) + '" /><select class="loadfrm" name="time">';
-      for (var i = 0; i < loadTimes.length && i < numDates; i++) {
-        txt += "<option value='" + loadTimes[i].trim() + "'>"
-               + (new MyDate(loadTimes[i])) + "</option>";
-      }
-
-      txt += "</select><input type='submit' value='load' /><br /><span style='font-size: 0.8em;'>";
-
-      if (loadTimes.length > numDates)
-      {
-        txt += "&laquo; <a class='fakelink' onclick='workspace.loadlist("
-             + (offset+numDates) + ")'>" + strings.LOADVERSIONS_OLDER + "</a> ";
-        if (offset > 0)
-          txt += "| ";
-      }
-      if (offset > 0) {
-        txt += "<a class='fakelink' onclick='workspace.loadlist("
-             + (offset-numDates) + ")'>" + strings.LOADVERSIONS_NEWER + "</a> &raquo;";
-      }
-
-      txt += "<br />" + strings.LOADVERSIONS_DATE_NOTE + "</span></div>";
+      note.setText(note.text + '\n' + strings.LOADVERSIONS_NONE);
+      this.reZOrder('load');
+      return;
     }
-    this.notes['load'].setText(txt);
+    note.setText(strings.LOADVERSIONS_ABOUT);
+
+    var form = document.createElement('form');
+    form.method = 'GET';
+    form.action = 'load.py';
+    form.addEventListener('mousedown', stopPropagation);
+    var name = document.createElement('input');
+    name.type = 'hidden';
+    name.name = 'name';
+    name.value = myescape(this.name);
+    var select = document.createElement('select');
+    select.className = 'loadfrm';
+    select.name = 'time';
+    for (var i = 0; i < loadTimes.length && i < numDates; i++) {
+      select.add(new Option(String(new MyDate(loadTimes[i])), loadTimes[i].trim()));
+    }
+    var submit = document.createElement('input');
+    submit.type = 'submit';
+    submit.value = 'load';
+
+    var links = document.createElement('span');
+    links.style.fontSize = '0.8em';
+    var pageLink = function(text, newOffset) {
+      var a = document.createElement('a');
+      a.className = 'fakelink';
+      a.textContent = text;
+      a.addEventListener('click', function() { workspace.loadlist(newOffset); });
+      return a;
+    };
+    if (loadTimes.length > numDates)
+    {
+      links.append('\u00ab ', pageLink(strings.LOADVERSIONS_OLDER, offset + numDates), ' ');
+      if (offset > 0)
+        links.append('| ');
+    }
+    if (offset > 0) {
+      links.append(pageLink(strings.LOADVERSIONS_NEWER, offset - numDates), ' \u00bb');
+    }
+    links.append(document.createElement('br'), strings.LOADVERSIONS_DATE_NOTE);
+
+    form.append(name, select, submit, document.createElement('br'), links);
+    var div = document.createElement('div');
+    div.style.textAlign = 'center';
+    div.appendChild(form);
+    get('load').appendChild(div);
     this.reZOrder('load');
   },
 
@@ -1658,11 +1692,18 @@ function db(msg) {
 function init()
 {
   if (debugOn) {
-    get('db').innerHTML = "<form name='debugForm'>" +
-        "<textarea style='position:absolute;top:26px;right:10px;' id='debug' cols='50' rows='10'></textarea>" +
-        "<input type='button' onclick='document.debugForm.debug.value=\"\";' value='clear' />" +
-        "</form>";
-    get('debug').value = '';
+    var debug = document.createElement('textarea');
+    debug.id = 'debug';
+    debug.cols = 50;
+    debug.rows = 10;
+    debug.style.cssText = 'position:absolute;top:26px;right:10px;';
+    var clear = document.createElement('input');
+    clear.type = 'button';
+    clear.value = 'clear';
+    clear.addEventListener('click', function() { debug.value = ''; });
+    var form = document.createElement('form');
+    form.append(debug, clear);
+    get('db').appendChild(form);
   }
 
   // preload the close image
@@ -1672,6 +1713,18 @@ function init()
 
   var toolbar = get('toolbar');
   toolbar.addEventListener('mousedown', stopPropagation);
+  get('newImg').addEventListener('click', function() { workspace.createNote(); });
+  get('saveImg').addEventListener('click', function() { workspace.save(); });
+  get('reloadImg').addEventListener('click', function() { workspace.loadlist(); });
+  get('undoImg').addEventListener('click', function() { workspace.history.undo(); });
+  get('redoImg').addEventListener('click', function() { workspace.history.redo(); });
+  var textfilter = get('textfilter');
+  textfilter.addEventListener('change', function() { workspace.filter(textfilter.value); });
+  textfilter.addEventListener('keydown', function(ev) {
+    if ('Enter' == ev.key)
+      workspace.filter(textfilter.value);
+    ev.stopPropagation();
+  });
   if (BROWSER_SAFARI == browser) {
     toolbar.style.width = '100%';
   }
@@ -1714,6 +1767,19 @@ function stopPropagation(e) {
 
 function preventDefault(e) {
   e.preventDefault();
+}
+
+/**
+ * Decode the character references in a note's text, as the HTML parser did
+ * when the edit box was built from a string (setText stores characters
+ * 160-255 as &#nnn;). Nothing else is parsed: a textarea's contents are text.
+ * @param {string} text
+ * @type string
+ */
+function decodeCharRefs(text) {
+  var textarea = document.createElement('textarea');
+  textarea.innerHTML = text.replace(/</g, '&lt;');
+  return textarea.value;
 }
 // absolute mouse positions; modified from:
 // http://www.web-wise-wizard.com/javascript-tutorials/javascript-mouse-event-handlers.html

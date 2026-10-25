@@ -92,6 +92,7 @@ def run(browser, base, name, previous):
     page.click('input[value=load]')
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
     check(page.evaluate('workspace.name') == name, 'home page form opens the workspace')
+    check(page.inner_text('#wsname') == name, 'the toolbar shows the name')
     workspace_page = page.url
 
     start_texts = note_texts(page)
@@ -410,6 +411,43 @@ def run_ui(browser, base, name):
     check(page.evaluate("!document.querySelector('#%s img').dispatchEvent(new MouseEvent("
                         "'mousedown', {bubbles: true, cancelable: true}))" % a),
           'an image in a note can\'t be dragged')
+
+    # The edit box shows character references decoded (setText stores
+    # characters 160-255 as &#nnn;), and only those: tags stay text.
+    page.evaluate('workspace.notes[%r].setText("caf\u00e9 &amp; <b>x</b></textarea>")' % a)
+    check(page.evaluate('workspace.notes[%r].text' % a) == 'caf&#233; &amp; <b>x</b></textarea>',
+          'setText stores characters 160-255 as references')
+    dblclick_in_front(page, a)
+    check(page.evaluate('get(%r).value' % (a + 'text')) == 'caf\u00e9 & <b>x</b></textarea>',
+          'the edit box decodes them')
+    click_background(page)
+    check(page.evaluate('workspace.notes[%r].text' % a) == 'caf&#233; & <b>x</b></textarea>',
+          'and saves what it shows')
+
+    # The history note: the list, and the older and newer links.
+    times = [str(1700000000000000 + i * 1000000) for i in range(12, 0, -1)]
+    offsets = []
+    def on_getdates(route):
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(route.request.url).query)
+        offsets.append(int(query['offset'][0]))
+        route.fulfill(body='|'.join(times[offsets[-1]:offsets[-1] + 11]))
+    page.route('**/getdates.py*', on_getdates)
+    page.click('#reloadImg')
+    page.wait_for_selector('#load select.loadfrm')
+    check(page.eval_on_selector_all('#load option', 'os => os.map(o => o.value)') == times[:10],
+          'the history note lists the first 10 times')
+    check(page.evaluate("get('load').querySelector('input[name=name]').value"
+                        " == myescape(workspace.name)"), 'with the escaped name')
+    check(page.locator('#load a.fakelink').all_text_contents()
+          == [page.evaluate('strings.LOADVERSIONS_OLDER')], 'and only an older link')
+    page.click('#load a.fakelink')
+    page.wait_for_function("get('load').querySelectorAll('option').length == 2")
+    check(offsets == [0, 10] and page.locator('#load a.fakelink').all_text_contents()
+          == [page.evaluate('strings.LOADVERSIONS_NEWER')], 'older shows the rest, with a newer link')
+    check(page.evaluate("document.querySelectorAll('[onclick], [onmousedown], [ondblclick],"
+                        " [onkeydown], [onchange], [onload]').length") == 0,
+          'no inline event handlers')
+    page.evaluate("workspace.notes['load'].destroy()")
 
     # A failed save says so, and the workspace stays unsaved.
     alert = page.evaluate('strings.SAVE_STATUS_ERROR')

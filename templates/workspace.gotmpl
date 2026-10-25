@@ -40,23 +40,24 @@ function loadinit()
 
 
 }
+window.addEventListener('load', loadinit);
 // -->
     </script>
     <link rel="stylesheet" href="style.css" type="text/css" />
     <title> {{.NameHTML}}</title>
 </head>
-<body onload='loadinit();' style='background-color: #f0f0f0;'>
+<body style='background-color: #f0f0f0;'>
   <div id='content'>
     <div id='toolbar'>
         <div class='controls'>
-          <img id="newImg" src='images/new.gif' class='controls' onclick="workspace.createNote()" alt='new note icon' />
-          <img id="saveImg" src='images/save.gif' class='controlsDisabled' onclick="workspace.save()" alt='disk icon (save)' />
-          <img id="reloadImg" src='images/reload.gif' class='controls' onclick="workspace.loadlist()" alt='reload icon' />
-          <img id="undoImg" src='images/undo.gif' class='controlsDisabled' onclick="workspace.history.undo()" alt='undo icon' />
-          <img id="redoImg" src='images/redo.gif' class='controlsDisabled' onclick="workspace.history.redo()" alt='redo icon' />
+          <img id="newImg" src='images/new.gif' class='controls' alt='new note icon' />
+          <img id="saveImg" src='images/save.gif' class='controlsDisabled' alt='disk icon (save)' />
+          <img id="reloadImg" src='images/reload.gif' class='controls' alt='reload icon' />
+          <img id="undoImg" src='images/undo.gif' class='controlsDisabled' alt='undo icon' />
+          <img id="redoImg" src='images/redo.gif' class='controlsDisabled' alt='redo icon' />
         </div>
         <div id='filters'>
-            <input style='width: 135px; padding: 1px 2px 1px 2px;' id='textfilter' onchange='workspace.filter(this.value)' onkeydown='if(13==event.keyCode){workspace.filter(this.value);}; event.cancelBubble=true;'/>
+            <input style='width: 135px; padding: 1px 2px 1px 2px;' id='textfilter' />
             <!-- this button is strictly for looks -->
             <input style='width: 50px;' type='button' value='filter' />
         </div>

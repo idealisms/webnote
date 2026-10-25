@@ -228,6 +228,17 @@ var pageValuePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`workspace\.loadedTime = (.*);\n  adminEmail`),
 }
 
+var inlineHandlersSincePython = strings.NewReplacer(
+	"}\n// -->", "}\nwindow.addEventListener('load', loadinit);\n// -->",
+	"<body onload='loadinit();' ", "<body ",
+	` onclick="workspace.createNote()"`, "",
+	` onclick="workspace.save()"`, "",
+	` onclick="workspace.loadlist()"`, "",
+	` onclick="workspace.history.undo()"`, "",
+	` onclick="workspace.history.redo()"`, "",
+	` onchange='workspace.filter(this.value)' onkeydown='if(13==event.keyCode){workspace.filter(this.value);}; event.cancelBubble=true;'/>`, " />",
+)
+
 // checkPage compares a workspace page with Python's. Python inserted values
 // unescaped; this port escapes them for their context, so the values are
 // compared after unescaping, and the rest byte for byte. Since the port,
@@ -240,6 +251,9 @@ func checkPage(t *testing.T, c *httpCase, got, want []byte) {
 	// was a literal "%s.xml" (TestPageFeedLink checks the link).
 	wantSkeleton = strings.Replace(wantSkeleton, `type="text/css" />"""`, `type="text/css" />`, 1)
 	gotSkeleton = rssLinkHref.ReplaceAllString(gotSkeleton, `<a id='rsslink' href="%s.xml">`)
+	// Since Python, the page's event handlers are added by webnote.js and
+	// the inline script instead of inline attributes.
+	wantSkeleton = inlineHandlersSincePython.Replace(wantSkeleton)
 	var gotValues, wantValues []string
 	for _, p := range pageValuePatterns {
 		gm, wm := p.FindStringSubmatchIndex(gotSkeleton), p.FindStringSubmatchIndex(wantSkeleton)
