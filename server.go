@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -275,14 +276,10 @@ func workspaceName(req *request, pathName string, fromPath bool) (string, error)
 	return name, nil
 }
 
-// notesValue loads the notes of the revision the request asks for (by its
-// time parameter) as a JSON value.
-func (s *server) notesValue(req *request, ws *Workspace) (pyValue, error) {
-	raw, err := ws.notesList(req.r.Context(), s.client, req.params.get("time"))
-	if err != nil {
-		return pyValue{}, err
-	}
-	return parsePyJSON(raw)
+// notesJSON loads the notes of the revision the request asks for (by its
+// time parameter), as stored: valid JSON, though not necessarily a list.
+func (s *server) notesJSON(req *request, ws *Workspace) (json.RawMessage, error) {
+	return ws.notesList(req.r.Context(), s.client, req.params.get("time"))
 }
 
 type pageValues struct {
@@ -316,12 +313,12 @@ func (s *server) load(req *request, pathName string, fromPath bool) {
 	if ws != nil {
 		values.NextNoteNum = ws.NextNoteNum
 		values.LoadedTime = epochMicros(ws.Time)
-		notes, err := s.notesValue(req, ws)
+		notes, err := s.notesJSON(req, ws)
 		if err != nil {
 			s.serverError(req, err)
 			return
 		}
-		values.NotesJS = jsSafeJSON(pyDumps(notes))
+		values.NotesJS = jsSafeJSON(string(notes))
 	}
 	var b bytes.Buffer
 	if err := workspaceTemplate.Execute(&b, values); err != nil {
@@ -361,9 +358,14 @@ func jsStringEscape(s string) string {
 	return b.String()
 }
 
-// jsSafeJSON makes JSON safe in an inline script: '<', '>' and '&' only
-// occur inside strings, where these escapes mean the same.
-var jsSafeJSON = strings.NewReplacer("<", `<`, ">", `>`, "&", `&`).Replace
+// jsSafeJSON makes JSON safe in an inline script, so that a note can't end
+// the script with "</script>" or start a comment with "<!--". '<', '>', '&',
+// U+2028 and U+2029 only occur inside strings, where these escapes mean the
+// same. (Scripts allow raw U+2028 and U+2029 only since ES2019.)
+var jsSafeJSON = strings.NewReplacer(
+	"<", "\\u003c", ">", "\\u003e", "&", "\\u0026",
+	"\u2028", "\\u2028", "\u2029", "\\u2029",
+).Replace
 
 func (s *server) rss(req *request, pathName string, fromPath bool) {
 	name, err := workspaceName(req, pathName, fromPath)
@@ -393,7 +395,7 @@ func (s *server) rss(req *request, pathName string, fromPath bool) {
 		req.w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	notes, err := s.notesValue(req, ws)
+	notes, err := s.notesJSON(req, ws)
 	if err != nil {
 		s.serverError(req, err)
 		return

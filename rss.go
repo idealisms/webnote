@@ -3,6 +3,7 @@ package main
 // The RSS feed, as rss_handler.py writes it with PyRSS2Gen.
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -52,45 +53,35 @@ func rfc822(t time.Time) string {
 
 type rssItem struct{ title, description, guid []rune }
 
-// renderRSS returns the feed for a workspace and its notes (a JSON value).
-func renderRSS(hostURL string, w *Workspace, notes pyValue) ([]byte, error) {
-	var elements []pyValue
-	switch notes.kind {
-	case kindList:
-		elements = notes.items
-	case kindDict:
-		// Iterating a dict gives its keys, which are strings.
-		for _, k := range notes.keys {
-			elements = append(elements, pyValue{kind: kindStr, s: k})
-		}
-	case kindStr:
-		for _, r := range notes.s {
-			elements = append(elements, pyValue{kind: kindStr, s: []rune{r}})
-		}
-	default:
+// renderRSS returns the feed for a workspace and its notes JSON.
+func renderRSS(hostURL string, w *Workspace, notesJSON []byte) ([]byte, error) {
+	// Fields are looked up by exact name, as in Python: decoding into a
+	// struct would also match "Text" or "ID".
+	var notes []map[string]json.RawMessage
+	if err := json.Unmarshal(notesJSON, &notes); err != nil || notes == nil {
 		return nil, errRSSNotes
 	}
 	link := hostURL + "/webnote/" + pyQuote(pyQuote(w.Name))
 	var items []rssItem
-	for _, n := range elements {
-		if n.kind != kindDict {
+	for _, n := range notes {
+		if n == nil {
 			return nil, errRSSNotes
 		}
-		text := []rune{}
-		if t, ok := n.get("text"); ok {
-			if t.kind != kindStr {
+		text := ""
+		if raw, ok := n["text"]; ok {
+			if text, ok = jsonString(raw); !ok {
 				return nil, errRSSNotes
 			}
-			text = t.s
 		}
-		id := []rune{}
-		if v, ok := n.get("id"); ok {
-			var err error
-			if id, err = pyStr(v); err != nil {
-				return nil, err
+		// An id that isn't a string (no stored note has one) is used as
+		// its JSON text.
+		id := ""
+		if raw, ok := n["id"]; ok {
+			if id, ok = jsonString(raw); !ok {
+				id = string(raw)
 			}
 		}
-		description := pyStrip(pyUnquote(text))
+		description := pyStrip(pyUnquote([]rune(text)))
 		title := description
 		for i, r := range title {
 			if r == '\n' {
@@ -101,7 +92,7 @@ func renderRSS(hostURL string, w *Workspace, notes pyValue) ([]byte, error) {
 		if len(title) > 60 {
 			title = title[:60]
 		}
-		items = append(items, rssItem{title, description, append([]rune(link+"#"), id...)})
+		items = append(items, rssItem{title, description, []rune(link + "#" + id)})
 	}
 
 	out := &rssWriter{}
@@ -126,30 +117,12 @@ func renderRSS(hostURL string, w *Workspace, notes pyValue) ([]byte, error) {
 	return []byte(out.b.String()), nil
 }
 
-// pyStr is str(v) for the JSON values a note id can be. Lists and dicts
-// (Python's repr) aren't supported; no stored note has one.
-func pyStr(v pyValue) ([]rune, error) {
-	switch v.kind {
-	case kindStr:
-		return v.s, nil
-	case kindNull:
-		return []rune("None"), nil
-	case kindBool:
-		if v.b {
-			return []rune("True"), nil
-		}
-		return []rune("False"), nil
-	case kindInt:
-		return []rune(v.i.String()), nil
-	case kindFloat:
-		s := pyFloatRepr(v.f)
-		switch s {
-		case "Infinity":
-			s = "inf"
-		case "-Infinity":
-			s = "-inf"
-		}
-		return []rune(s), nil
+// jsonString decodes a JSON string. Unmarshaling null into a string would
+// succeed and leave it empty, so other values are checked for first.
+func jsonString(raw json.RawMessage) (string, bool) {
+	var s string
+	if len(raw) == 0 || raw[0] != '"' || json.Unmarshal(raw, &s) != nil {
+		return "", false
 	}
-	return nil, errors.New("note id is a list or dict")
+	return s, true
 }

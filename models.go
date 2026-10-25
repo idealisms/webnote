@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 	"unicode/utf8"
 
 	"cloud.google.com/go/datastore"
@@ -190,6 +192,47 @@ func notesJSON(notes []note) []byte {
 	}
 	b.WriteByte(']')
 	return []byte(b.String())
+}
+
+// writePyJSONString writes a JSON string the way Python's json.dumps() does
+// with ensure_ascii: everything outside ' '-'~' is escaped, as \uXXXX UTF-16
+// code units in lowercase hex unless it has a short escape.
+func writePyJSONString(b *strings.Builder, s []rune) {
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '"':
+			b.WriteString(`\"`)
+		case '\\':
+			b.WriteString(`\\`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\b':
+			b.WriteString(`\b`)
+		case '\f':
+			b.WriteString(`\f`)
+		default:
+			if r >= ' ' && r <= '~' {
+				b.WriteRune(r)
+				continue
+			}
+			units := []uint16{uint16(r)}
+			if r > 0xffff {
+				r1, r2 := utf16.EncodeRune(r)
+				units = []uint16{uint16(r1), uint16(r2)}
+			}
+			for _, unit := range units {
+				b.WriteString(`\u`)
+				h := strconv.FormatUint(uint64(unit), 16)
+				b.WriteString(strings.Repeat("0", 4-len(h)) + h)
+			}
+		}
+	}
+	b.WriteByte('"')
 }
 
 var errNotesNotJSON = errors.New("notesJsonArray isn't JSON")

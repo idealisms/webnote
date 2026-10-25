@@ -12,6 +12,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -249,8 +250,11 @@ func checkPage(t *testing.T, c *httpCase, got, want []byte) {
 	if name, err := jsUnescape(gotValues[0]); err != nil || name != wantValues[0] {
 		t.Errorf("%s: page name %q (%v), want %q", c, gotValues[0], err, wantValues[0])
 	}
-	if jsSafeJSON(wantValues[1]) != gotValues[1] {
-		t.Errorf("%s: page notes\n got %s\nwant %s", c, gotValues[1], wantValues[1])
+	if strings.ContainsAny(gotValues[1], "<>&  ") {
+		t.Errorf("%s: page notes aren't escaped for the script: %s", c, truncate(gotValues[1]))
+	}
+	if !sameJSONValue(gotValues[1], wantValues[1]) {
+		t.Errorf("%s: page notes\n got %s\nwant %s", c, truncate(gotValues[1]), truncate(wantValues[1]))
 	}
 	if title := html.UnescapeString(gotValues[2]); title != wantValues[2] {
 		t.Errorf("%s: page title %q, want %q", c, gotValues[2], wantValues[2])
@@ -264,6 +268,17 @@ func checkPage(t *testing.T, c *httpCase, got, want []byte) {
 	if loaded != wantValues[3] {
 		t.Errorf("%s: page loadedTime %s (%s), want %s", c, gotValues[3], loaded, wantValues[3])
 	}
+}
+
+// sameJSONValue reports whether two JSON texts decode to the same value. The
+// page passes stored notes through, so their formatting differs from
+// Python's json.dumps(), but the browser sees the same values.
+func sameJSONValue(got, want string) bool {
+	var g, w any
+	if json.Unmarshal([]byte(got), &g) != nil || json.Unmarshal([]byte(want), &w) != nil {
+		return got == want
+	}
+	return reflect.DeepEqual(g, w)
 }
 
 // jsUnescape undoes jsStringEscape().
@@ -346,6 +361,13 @@ var fixedSincePython = map[string]fixedResponse{
 	"GET /webnote/rss%2520valid%2520utf8.xml":    {status: 200, contains: "<title>&#195;&#169;</title><description>&#195;&#169;</description>"},
 	"GET /webnote/rss%2520split.xml":             {status: 200, contains: "<title>&#169;</title><description>&#169;</description><guid isPermaLink=\"true\">http://localhost/webnote/rss%252520split#n1</guid></item><item><title>&#195;</title>"},
 	"GET /webnote/caf%2525C3%2525A9%2520rss.xml": {status: 200, contains: "<title>caf&#233; rss</title>"},
+
+	// A note id that isn't a string is its JSON text, not Python's str().
+	"GET /webnote/blob%2520nonstring%2520id.xml": {status: 200, contains: "#1.5</guid></item><item><title>t</title><description>t</description><guid isPermaLink=\"true\">http://localhost/webnote/blob%252520nonstring%252520id#true</guid></item><item><title>t</title><description>t</description><guid isPermaLink=\"true\">http://localhost/webnote/blob%252520nonstring%252520id#null</guid>"},
+
+	// The page passes the stored notes JSON through instead of Python's
+	// json.dumps(). The browser reads 1e400 as Infinity either way.
+	"GET /webnote/blob%2520overflow": {status: 200, contains: "var notes = [1e400, -1e400, 1e-400];"},
 
 	// Requests that can't be served as sent are 400s, not 500s. (So are
 	// saves Python answered with a 500; see badSaveSincePython.)
@@ -626,7 +648,7 @@ func TestEpochTimes(t *testing.T) {
 		{"99999999999999999999", "save1"},
 	} {
 		page := do("GET", "/webnote/ws?time="+c.time, "")
-		if c.want == "[]" && !strings.Contains(page, "var notes = [];") || c.want != "[]" && !strings.Contains(page, `"text": "`+c.want+`"`) {
+		if c.want == "[]" && !strings.Contains(page, "var notes = [];") || c.want != "[]" && !strings.Contains(page, `"text":"`+c.want+`"`) {
 			t.Errorf("time=%s: page doesn't have %s", c.time, c.want)
 		}
 	}
@@ -641,5 +663,92 @@ func TestEpochTimes(t *testing.T) {
 	}
 	if page := do("GET", "/webnote/new", ""); !strings.Contains(page, "workspace.loadedTime = 0;") {
 		t.Errorf("new workspace's page doesn't have loadedTime 0")
+	}
+}
+
+func TestRSSNotesJSON(t *testing.T) {
+	w := &Workspace{Name: "ws", Time: time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)}
+	for _, c := range []struct {
+		notes string
+		want  string // in the feed, or "" for errRSSNotes
+	}{
+		{`[]`, "</docs></channel>"},
+		{`[{"id":"a","text":"x"},{"id":"b","text":"y"}]`, "#b</guid></item><item><title>x</title>"},
+		{`[{"text":"no id"}]`, "<guid isPermaLink=\"true\">http://h/webnote/ws#</guid>"},
+		{`[{"id":"no text"}]`, "<title></title><description></description>"},
+		// Keys match exactly, as in Python: "Text" isn't "text".
+		{`[{"id":"a","Text":"x","text":"y"}]`, "<title>y</title>"},
+		{`[{"id":"a","text":"x","text":"y"}]`, "<title>y</title>"},
+		{`[{"id":[1, {"a":2}],"text":"t"}]`, `#[1, {"a":2}]</guid>`},
+		// encoding/json reads a lone surrogate as U+FFFD (Python kept it).
+		{`[{"id":"a","text":"\ud800"}]`, "<title>&#65533;</title>"},
+		{`[{"id":"a","text":"caf%C3%A9\n2"}]`, "<title>caf&#233;</title><description>caf&#233;\n2</description>"},
+		{`{}`, ""},
+		{`""`, ""},
+		{`null`, ""},
+		{`{"id":"a","text":"x"}`, ""},
+		{`[null]`, ""},
+		{`["a"]`, ""},
+		{`[{"id":"a","text":null}]`, ""},
+		{`[{"id":"a","text":5}]`, ""},
+	} {
+		body, err := renderRSS("http://h", w, []byte(c.notes))
+		if c.want == "" {
+			if err != errRSSNotes {
+				t.Errorf("%s: got %q, %v; want errRSSNotes", c.notes, body, err)
+			}
+		} else if err != nil || !strings.Contains(string(body), c.want) {
+			t.Errorf("%s: got %q, %v; want it to contain %q", c.notes, body, err, c.want)
+		}
+	}
+}
+
+func TestPageEscapesNotes(t *testing.T) {
+	ctx, client := newTestClient(t)
+	at := time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
+	w := putWorkspace(t, ctx, client, "ws", at, 1)
+	const notes = `[{"id":"a","text":"</script><!-- & \u2028 \u2029 >"}]`
+	putNotes(t, ctx, client, w, at, strings.NewReplacer(`\u2028`, "\u2028", `\u2029`, "\u2029").Replace(notes))
+	rec := httptest.NewRecorder()
+	newTestServer(client, at).ServeHTTP(rec, httptest.NewRequest("GET", "/webnote/ws", nil))
+	want := `var notes = [{"id":"a","text":"\u003c/script\u003e\u003c!-- \u0026 \u2028 \u2029 \u003e"}];`
+	if page := rec.Body.String(); rec.Code != 200 || !strings.Contains(page, want) {
+		t.Errorf("page %d doesn't contain %s:\n%s", rec.Code, want, truncate(page))
+	}
+}
+
+// A page takes time linear in its notes: parsing them with a parser that
+// copied the rest of the input for each token made large workspaces take
+// 20-50 s to load (2026-10-23). Allocated bytes are a deterministic stand-in
+// for time.
+func TestLargePageAllocatesLinearly(t *testing.T) {
+	ctx, client := newTestClient(t)
+	at := time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
+	w := putWorkspace(t, ctx, client, "ws", at, 1)
+	var b strings.Builder
+	b.WriteString("[")
+	for i := 0; i < 5000; i++ {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, `{"id":"note%d","xPos":"%d","text":"caf%%E9 <b>%d</b> &amp; \"quoted\" \\u00e9"}`, i, i, i)
+	}
+	b.WriteString("]")
+	putNotes(t, ctx, client, w, at, b.String())
+	s := newTestServer(client, at)
+
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest("GET", "/webnote/ws", nil))
+	runtime.ReadMemStats(&after)
+	if rec.Code != 200 {
+		t.Fatalf("status %d", rec.Code)
+	}
+	alloc := after.TotalAlloc - before.TotalAlloc
+	t.Logf("%d bytes of notes allocated %d bytes (%.1fx)", b.Len(), alloc, float64(alloc)/float64(b.Len()))
+	if alloc > 50*uint64(b.Len()) {
+		t.Errorf("a page of %d bytes of notes allocated %d bytes", b.Len(), alloc)
 	}
 }
