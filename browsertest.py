@@ -17,6 +17,10 @@ the other on the same workspaces, and each must see what the previous one left:
 names are escaped the same way in every browser. Any alert or JavaScript error
 fails the test.
 
+Before that, run_ui() drives the note interactions (dragging, resizing,
+colors, editing, deleting, undo/redo, the mini notes, the filter and keyboard
+shortcuts) on an empty workspace, without saving.
+
 Against anything but localhost, only workspaces whose names start with
 webnote_smoketest are allowed, since the test saves to them.
 """
@@ -29,6 +33,10 @@ import urllib.parse
 from playwright.sync_api import sync_playwright
 
 LOCAL_WORKSPACES = ['browser-test', 'Bogotá café', '日本 \U0001f600']
+# run_ui() needs an empty workspace, which it never saves: this one locally,
+# or the first --workspace name plus this suffix.
+LOCAL_UI_WORKSPACE = 'browser-test-ui'
+UI_SUFFIX = '_ui'
 TEXT = ('browser test %s café ♥ 日本 \U0001f600 <b>bold</b> &amp; '
         '"double" \'single\' %%41\nsecond line')
 
@@ -156,6 +164,224 @@ def run(browser, base, name, previous):
     return end_texts
 
 
+def note_box(page, note_id):
+    """The note's position and size as the client stores them."""
+    return page.evaluate(
+        "id => { const s = get(id).style;"
+        " return [parseInt(s.left), parseInt(s.top), parseInt(s.width), parseInt(s.height)]; }",
+        note_id)
+
+
+def mouse_drag(page, x, y, dx, dy, modifier=None):
+    """Hovers (x, y) so the note picks its cursor, then drags by (dx, dy)."""
+    page.mouse.move(x - 40, y - 40)
+    page.mouse.move(x, y, steps=3)
+    if modifier:
+        page.keyboard.down(modifier)
+    page.mouse.down()
+    page.mouse.move(x + dx, y + dy, steps=5)
+    page.mouse.up()
+    if modifier:
+        page.keyboard.up(modifier)
+
+
+def click_background(page):
+    page.mouse.click(700, 550)
+
+
+def undo(page):
+    page.click('#undoImg')
+
+
+def redo(page):
+    page.click('#redoImg')
+
+
+def new_note(page):
+    page.click('#newImg')
+    return page.evaluate("'note' + (workspace.nextNoteNum - 1)")
+
+
+def run_ui(browser, base, name):
+    """Drives the note interactions on an empty workspace, without saving:
+    dragging, resizing, colors, editing, deleting, undo/redo, wiki text, the
+    mini notes, the filter, keyboard shortcuts, the save XML and the collision
+    warning."""
+    page = browser.new_page(viewport={'width': 1280, 'height': 800})
+    problems = []
+    def on_dialog(dialog):
+        if dialog.type == 'beforeunload':
+            dialog.accept()
+        else:
+            problems.append('%s: %s' % (dialog.type, dialog.message))
+            dialog.dismiss()
+    page.on('dialog', on_dialog)
+    page.on('pageerror', lambda e: problems.append('JavaScript error: %s' % e))
+    saves = []
+    page.route('**/save.py*', lambda route: (saves.append(route.request.url), route.abort()))
+
+    page.goto(base + '/webnote/' + urllib.parse.quote(urllib.parse.quote(name)))
+    page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
+    if page.evaluate('workspace.numNotes'):
+        raise BrowserTestError('workspace %r for the UI test must be empty' % name)
+
+    # Create: a note, its mini note, and an undo entry.
+    a = new_note(page)
+    check(page.evaluate("!!get(%r) && !!get('m' + %r)" % (a, a)), 'new note has a mini note')
+    check(page.evaluate("get('undoImg').className") == 'controls', 'creating a note can be undone')
+    check(page.evaluate("get('saveImg').className") == 'controls', 'creating a note enables save')
+
+    # Drag by the middle.
+    x, y, w, h = note_box(page, a)
+    box = page.locator('#' + a).bounding_box()
+    mouse_drag(page, box['x'] + box['width'] / 2, box['y'] + box['height'] / 2, 60, 40)
+    check(note_box(page, a) == [x + 60, y + 40, w, h], 'dragging moves the note')
+    check(page.evaluate("get(%r).style.borderColor" % a) in ('rgb(0, 0, 0)', 'black', '#000'),
+          'the border goes back to black after the drag')
+    undo(page)
+    check(note_box(page, a) == [x, y, w, h], 'undo puts the note back')
+    redo(page)
+    check(note_box(page, a) == [x + 60, y + 40, w, h], 'redo moves it again')
+
+    # Resize from the bottom-right corner (inside the 3px border).
+    x, y, w, h = note_box(page, a)
+    box = page.locator('#' + a).bounding_box()
+    mouse_drag(page, box['x'] + box['width'] - 2, box['y'] + box['height'] - 2, 30, 20)
+    check(note_box(page, a) == [x, y, w + 30, h + 20], 'dragging the corner resizes the note')
+    undo(page)
+    check(note_box(page, a) == [x, y, w, h], 'undo restores the size')
+    redo(page)
+    check(note_box(page, a) == [x, y, w + 30, h + 20], 'redo resizes it again')
+
+    # Colors: the swatches while editing, then the number keys.
+    colors = page.evaluate('bgColors')
+    page.dblclick('#' + a)
+    page.locator('#%s div[title]' % a).nth(1).dispatch_event('mousedown')
+    click_background(page)
+    check(page.evaluate('workspace.notes[%r].bgColor.toString()' % a) == colors[1],
+          'a swatch sets the color')
+    check(page.evaluate("new Color(get('m' + %r).style.backgroundColor).toString()" % a)
+          == colors[1], 'the mini note gets the color')
+    undo(page)
+    check(page.evaluate('workspace.notes[%r].bgColor.toString()' % a) == colors[0],
+          'undo restores the color')
+    redo(page)
+    page.keyboard.press('3')
+    check(page.evaluate('workspace.notes[%r].bgColor.toString()' % a) == colors[2],
+          'a number key colors the top note')
+    page.keyboard.press('1')
+
+    # Text: wiki headings, links and line breaks; undo and redo.
+    page.dblclick('#' + a)
+    page.fill('#%stext' % a, '!!Heading\nsee http://example.com/x ok\n<b>bold</b>')
+    click_background(page)
+    # Today's output, quirks included: the heading keeps its <br>, and the
+    # link swallows the space before it. Change these on purpose.
+    check(page.evaluate('get(%r).innerHTML' % a)
+          == '<h2>Heading<br></h2>see<a href="http://example.com/x">http://example.com/x</a>'
+             ' ok<br><b>bold</b>',
+          '!! makes a heading, URLs become links, and notes render HTML')
+    undo(page)
+    check(page.evaluate('workspace.notes[%r].text' % a) == '', 'undo restores the text')
+    redo(page)
+    check(page.evaluate('workspace.notes[%r].text' % a).startswith('!!Heading'),
+          'redo restores the edit')
+
+    # Two notes: z-order, the mini notes, keyboard selection and moves.
+    b = new_note(page)
+    top = lambda: page.evaluate('workspace.topId')
+    check(top() == b, 'a new note is on top')
+    page.click('#m' + a)
+    check(top() == a, 'clicking a mini note brings its note to the front')
+    page.keyboard.press('n')
+    check(top() == b, 'N selects the next note')
+    page.keyboard.press('p')
+    check(top() == a, 'P selects the previous note')
+    x, y, w, h = note_box(page, a)
+    page.keyboard.press('ArrowRight')
+    page.keyboard.press('ArrowDown')
+    check(note_box(page, a) == [x + 8, y + 8, w, h], 'arrow keys move the top note')
+
+    # Alt + right click sends a note to the back. Selecting a note (P above)
+    # shows its id over its corner for 500 ms; wait for that to go.
+    page.wait_for_timeout(600)
+    box = page.locator('#' + a).bounding_box()
+    page.mouse.move(box['x'] + 20, box['y'] + 20)
+    page.keyboard.down('Alt')
+    page.mouse.down(button='right')
+    page.mouse.up(button='right')
+    page.keyboard.up('Alt')
+    check(page.evaluate('parseInt(get(%r).style.zIndex) < parseInt(get(%r).style.zIndex)' % (a, b)),
+          'alt + right click sends the note to the back')
+
+    # Ctrl + drag moves every note of the same color.
+    page.evaluate('workspace.notes[%r].setColor(bgColors[0])' % b)
+    a_box, b_box = note_box(page, a), note_box(page, b)
+    box = page.locator('#' + b).bounding_box()
+    mouse_drag(page, box['x'] + box['width'] / 2, box['y'] + box['height'] / 2, -20, 30, 'Control')
+    check(note_box(page, a)[:2] == [a_box[0] - 20, a_box[1] + 30]
+          and note_box(page, b)[:2] == [b_box[0] - 20, b_box[1] + 30],
+          'ctrl + drag moves the notes of the same color')
+
+    # Filter: notes that don't match fade out.
+    page.fill('#textfilter', 'Heading')
+    page.press('#textfilter', 'Enter')
+    check(page.evaluate("[get(%r).className, get(%r).className]" % (a, b)) == ['note', 'noteHide'],
+          'the filter fades notes that don\'t match')
+    check(page.evaluate("get('m' + %r).className" % b) == 'mininote noteHide',
+          'and their mini notes')
+    page.fill('#textfilter', '')
+    page.press('#textfilter', 'Enter')
+    check(page.evaluate("get(%r).className" % b) == 'note', 'an empty filter shows every note')
+
+    # The save XML has what the page shows.
+    page.evaluate('workspace.notes[%r].setColor(bgColors[4])' % b)
+    xml = page.evaluate('workspace.toString()')
+    x, y, w, h = note_box(page, a)
+    expected = ("<note noteid='%s' bgcolor='%s' xposition='%d' yposition='%d' height='%d' width='%d'"
+                % (a, colors[0], x, y, h, w))
+    check(expected in xml, 'the save XML has the position, size and color')
+    check(page.evaluate('escape(workspace.notes[%r].text)' % a) in xml, 'and the escaped text')
+    check(("name='%s'" % page.evaluate('myescape(workspace.name)')) in xml, 'and the escaped name')
+
+    # Delete with the close icon; undo brings the note back with its text.
+    page.evaluate('workspace.notes[%r].setText("kept text")' % b)
+    page.click('#m' + b)  # Bring it in front of the other note.
+    box = page.locator('#' + b).bounding_box()
+    page.mouse.dblclick(box['x'] + box['width'] - 20, box['y'] + box['height'] - 20)
+    page.click('#%s img[src="images/close.gif"]' % b)
+    check(page.evaluate("!get(%r) && !get('m' + %r) && !(%r in workspace.notes)" % (b, b, b)),
+          'the close icon deletes the note')
+    undo(page)
+    check(page.evaluate('workspace.notes[%r] && workspace.notes[%r].text' % (b, b)) == 'kept text',
+          'undo brings it back with its text')
+    redo(page)
+    check(page.evaluate('!(%r in workspace.notes)' % b), 'redo deletes it again')
+
+    # B makes a bookmarklet note for this workspace.
+    count = page.evaluate('workspace.numNotes')
+    page.keyboard.press('b')
+    check(page.evaluate('workspace.numNotes') == count + 1, 'B makes a note')
+    check(page.evaluate("Object.values(workspace.notes).some(n => n.text.indexOf("
+                        "'load.py?name=' + escape(escape(myescape(workspace.name)))) >= 0)"),
+          'with a bookmarklet for this workspace')
+
+    # Unsaved changes ask before leaving.
+    check(bool(page.evaluate('winBeforeUnload()')), 'unsaved changes warn before leaving')
+
+    # Collision warning: getrecent.py reports a newer save.
+    newer = page.evaluate('workspace.loadedTime') + 1
+    page.route('**/getrecent.py*', lambda route: route.fulfill(body=str(newer)))
+    page.evaluate('workspace.checkUpdated()')
+    page.wait_for_function("'updated' in workspace.notes")
+    check(True, 'a newer save on the server shows the collision warning')
+
+    check(not saves, 'nothing was saved')
+    check(not problems, 'no alerts or JavaScript errors%s' % (
+        '' if not problems else ': %s' % problems))
+    page.close()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -177,6 +403,9 @@ def main():
             previous = {}
             for browser_name in args.browser or ['chromium', 'firefox']:
                 browser = getattr(p, browser_name).launch()
+                ui_name = LOCAL_UI_WORKSPACE if not args.workspace else names[0] + UI_SUFFIX
+                print('%s: note interactions on %r' % (browser_name, ui_name))
+                run_ui(browser, base, ui_name)
                 for name in names:
                     print('%s: workspace %r' % (browser_name, name))
                     previous[name] = run(browser, base, name, previous.get(name))
