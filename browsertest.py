@@ -112,6 +112,10 @@ def run(browser, base, name, previous):
           == first_text, 'the note survives a reload')
     check(page.evaluate('workspace.loadedTime') == first_time,
           'the page shows the save time')
+    feed = page.request.get(page.evaluate("get('rsslink').href"))
+    check(feed.status == 200 and '#%s</guid>' % note_id in feed.text()
+          and page.evaluate('escape(escape(myescape(workspace.name)))') in feed.text(),
+          'the RSS link opens this workspace\'s feed')
 
     # No pause: saves in the same second are separate revisions.
     second = TEXT % (run_id + ' second')
@@ -275,10 +279,10 @@ def run_ui(browser, base, name):
     page.dblclick('#' + a)
     page.fill('#%stext' % a, '!!Heading\nsee http://example.com/x ok\n<b>bold</b>')
     click_background(page)
-    # Today's output, quirks included: the heading keeps its <br>, and the
-    # link swallows the space before it. Change these on purpose.
+    # Today's output, quirks included: the heading keeps its <br>. Change
+    # it on purpose.
     check(page.evaluate('get(%r).innerHTML' % a)
-          == '<h2>Heading<br></h2>see<a href="http://example.com/x">http://example.com/x</a>'
+          == '<h2>Heading<br></h2>see <a href="http://example.com/x">http://example.com/x</a>'
              ' ok<br><b>bold</b>',
           '!! makes a heading, URLs become links, and notes render HTML')
     undo(page)
@@ -365,6 +369,19 @@ def run_ui(browser, base, name):
     check(page.evaluate("Object.values(workspace.notes).some(n => n.text.indexOf("
                         "'load.py?name=' + escape(escape(myescape(workspace.name)))) >= 0)"),
           'with a bookmarklet for this workspace')
+
+    # URLs become links wherever they start a word, and the text around them
+    # stays.
+    for text, html in [
+        ('see https://example.com/s ok', 'see <a href="https://example.com/s">https://example.com/s</a> ok'),
+        ('http://example.com/start', '<a href="http://example.com/start">http://example.com/start</a>'),
+        ('!title\nhttp://example.com/a?x=1#top end',
+         '<h3>title<br></h3><a href="http://example.com/a?x=1#top">http://example.com/a?x=1#top</a> end'),
+        ('a\tftp://example.com/f', 'a\t<a href="ftp://example.com/f">ftp://example.com/f</a>'),
+        ('nohttp://example.com mailto:x@example.com', 'nohttp://example.com mailto:x@example.com'),
+    ]:
+        page.evaluate('t => workspace.notes[%r].setText(t)' % a, text)
+        check(page.evaluate('get(%r).innerHTML' % a) == html, 'links in %r' % text)
 
     # Unsaved changes ask before leaving.
     check(bool(page.evaluate('winBeforeUnload()')), 'unsaved changes warn before leaving')

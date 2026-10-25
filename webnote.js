@@ -438,11 +438,10 @@ Note.prototype.getHTML = function() // wikification
   var sCopy = this.text.replace(/\n/g,"<br />\n");
   sCopy = sCopy.replace(/\\<br \/>\n/g,"\n");
 
-  // Turn URLs into links
-  try {
-    sCopy = sCopy.replace(/\s((http|ftp)(:\/\/[-a-zA-Z0-9%.~:_\/]+[a-zA-Z\/])([?&]([-a-zA-Z0-9%.~:_]+)=([-a-zA-Z0-9%.~:_])+)*(#([-a-zA-Z0-9%.~:_]+)?)?)/g,
-                          '<a href="$1">$1</a>');
-  } catch (e) {}
+  // Turn URLs into links: at the start of the text or after whitespace,
+  // which stays (a newline here is the end of a line).
+  sCopy = sCopy.replace(/(^|\s)((https?|ftp)(:\/\/[-a-zA-Z0-9%.~:_\/]+[a-zA-Z\/])([?&]([-a-zA-Z0-9%.~:_]+)=([-a-zA-Z0-9%.~:_])+)*(#([-a-zA-Z0-9%.~:_]+)?)?)/g,
+                        '$1<a href="$2">$2</a>');
   var lines = sCopy.split('\n');
   for (var i = 0; i < lines.length; i++) {
     if (lines[i].length > 0) {
