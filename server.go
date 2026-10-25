@@ -284,6 +284,9 @@ func (s *server) notesJSON(req *request, ws *Workspace) (json.RawMessage, error)
 
 type pageValues struct {
 	NameJS, NameHTML, NotesJS string
+	// FeedURL is the workspace's RSS feed, escaped twice like the links
+	// the client builds (escape(escape(myescape(name)))).
+	FeedURL string
 	// LoadedTime is the workspace's time as epochMicros(), or 0.
 	LoadedTime  string
 	NextNoteNum int64
@@ -301,6 +304,7 @@ func (s *server) load(req *request, pathName string, fromPath bool) {
 	values := pageValues{
 		NameJS:     jsStringEscape(name),
 		NameHTML:   html.EscapeString(name),
+		FeedURL:    html.EscapeString("/webnote/" + pyQuote(pyQuote(canonicalWsName(name))) + ".xml"),
 		NotesJS:    "[]",
 		LoadedTime: "0",
 		Version:    url.QueryEscape(s.version),

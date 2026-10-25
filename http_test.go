@@ -219,6 +219,8 @@ func truncate(s string) string {
 	return s
 }
 
+var rssLinkHref = regexp.MustCompile(`<a id='rsslink' href="[^"]*">`)
+
 var pageValuePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?s)workspace\.setName\(unescape\('(.*)'\)\);\n  workspace\.loadedTime`),
 	regexp.MustCompile(`(?s)var notes = (.*);\n  for \(var n in notes\)`),
@@ -234,6 +236,10 @@ var pageValuePatterns = []*regexp.Regexp{
 func checkPage(t *testing.T, c *httpCase, got, want []byte) {
 	t.Helper()
 	gotSkeleton, wantSkeleton := strings.ReplaceAll(string(got), `.js?v="`, `.js"`), string(want)
+	// Fixed since Python: the template had a stray `"""`, and the RSS link
+	// was a literal "%s.xml" (TestPageFeedLink checks the link).
+	wantSkeleton = strings.Replace(wantSkeleton, `type="text/css" />"""`, `type="text/css" />`, 1)
+	gotSkeleton = rssLinkHref.ReplaceAllString(gotSkeleton, `<a id='rsslink' href="%s.xml">`)
 	var gotValues, wantValues []string
 	for _, p := range pageValuePatterns {
 		gm, wm := p.FindStringSubmatchIndex(gotSkeleton), p.FindStringSubmatchIndex(wantSkeleton)
@@ -752,5 +758,46 @@ func TestLargePageAllocatesLinearly(t *testing.T) {
 	t.Logf("%d bytes of notes allocated %d bytes (%.1fx)", b.Len(), alloc, float64(alloc)/float64(b.Len()))
 	if alloc > 50*uint64(b.Len()) {
 		t.Errorf("a page of %d bytes of notes allocated %d bytes", b.Len(), alloc)
+	}
+}
+
+// The toolbar's RSS link reaches the workspace's feed, for the page's URL
+// and load.py, whatever form the name was requested in.
+func TestPageFeedLink(t *testing.T) {
+	ctx, client := newTestClient(t)
+	at := time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
+	s := newTestServer(client, at)
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		return rec
+	}
+	href := regexp.MustCompile(`<a id='rsslink' href="([^"]*)">`)
+	for _, name := range []string{"plain", "my notes", "Bogotá café", "日本 😀", "a%2Db"} {
+		stored := canonicalWsName(name)
+		putNotes(t, ctx, client, putWorkspace(t, ctx, client, stored, at, 1), at, `[{"id":"n","text":"x"}]`)
+		for _, path := range []string{
+			"/webnote/" + pyQuote(pyQuote(stored)), // what the client links to
+			"/webnote/" + pyQuote(name),            // typed by hand
+			"/webnote/load.py?name=" + pyQuote(stored),
+		} {
+			m := href.FindStringSubmatch(get(path).Body.String())
+			if m == nil {
+				t.Errorf("%s: no RSS link", path)
+				continue
+			}
+			// Resolve the link against the page, as a browser does.
+			ref, err := url.Parse(html.UnescapeString(m[1]))
+			if err != nil {
+				t.Errorf("%s: RSS link %q: %v", path, m[1], err)
+				continue
+			}
+			link := (&url.URL{Path: "/webnote/"}).ResolveReference(ref).EscapedPath()
+			feed := get(link)
+			want := "<link>http://example.com" + strings.TrimSuffix(link, ".xml") + "</link>"
+			if feed.Code != 200 || !strings.Contains(feed.Body.String(), want) {
+				t.Errorf("%s: RSS link %s is a %d without %s", path, link, feed.Code, want)
+			}
+		}
 	}
 }

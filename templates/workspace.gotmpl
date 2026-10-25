@@ -42,7 +42,7 @@ function loadinit()
 }
 // -->
     </script>
-    <link rel="stylesheet" href="style.css" type="text/css" />"""
+    <link rel="stylesheet" href="style.css" type="text/css" />
     <title> {{.NameHTML}}</title>
 </head>
 <body onload='loadinit();' style='background-color: #f0f0f0;'>
@@ -63,7 +63,7 @@ function loadinit()
         <div id='mini'>
         </div>
         <div id='links'>
-          <a id='rsslink' href="%s.xml"><img style='margin: 6px 2px;border:0;width:19px;height:9px;' src='images/minixml.gif' /></a>
+          <a id='rsslink' href="{{.FeedURL}}"><img style='margin: 6px 2px;border:0;width:19px;height:9px;' src='images/minixml.gif' /></a>
         </div>
         <div id='wsname'>
         </div>
