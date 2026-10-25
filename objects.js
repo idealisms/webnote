@@ -15,18 +15,8 @@ var dec2hex = function(d)
 };
 
 var getxmlreqobj = function() {
-  var xmlobj;
-  try { xmlobj = new ActiveXObject("Msxml2.XMLHTTP"); }
-  catch (e) {
-    try { xmlobj = new XMLHttpRequest(); }
-    catch (e) { alert("Your browser doesn't support xmlhttprequest.  Unable to save."); }
-  }
-  return xmlobj;
+  return new XMLHttpRequest();
 };
-
-String.prototype.trim = function() {
-  return this.replace(/^\s+/, '').replace(/\s+$/, '');
-}
 
 /**
  * Reduces the chance of a closure leaking memory by minimizing the scope.
@@ -67,13 +57,7 @@ function findPos(obj)
 function findRelativeMousePos(ev) {
   var target = ev.target || ev.srcElement;
   var targetPos = findPos(target);
-  var pagePos;
-  if (ev.pageX || ev.pageY) {
-    pagePos = new Point(ev.pageX, ev.pageY);
-  } else if (ev.clientX || ev.clientY) {
-    pagePos = new Point(ev.clientX + document.body.scrollLeft,
-                        ev.clientY + document.body.scrollTop);
-  }
+  var pagePos = new Point(ev.pageX, ev.pageY);
   // Take content scroll into account since we use that instead of
   // scrolling the body.
   var content = get('content');

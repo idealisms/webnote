@@ -37,29 +37,12 @@ for (var c in colorMap)
 }
 
 // other global variables, you shouldn't change these
-var BROWSER_IE_6 = 0;
-var BROWSER_IE_5 = 1;
+// BROWSER_SAFARI is any WebKit or Blink browser (Safari, Chrome, Edge);
+// BROWSER_MOZILLA is everything else (Firefox).
 var BROWSER_SAFARI = 2;
 var BROWSER_MOZILLA = 3;
-var BROWSER_OPERA = 4;
-var browser;
-
-(function () { // closure away userAgent
-  var userAgent = navigator.userAgent.toLowerCase();
-  if (userAgent.indexOf('opera') != -1) { // opera contains msie and opera
-    browser = BROWSER_OPERA;
-  } else if (userAgent.indexOf('webkit') != -1) {
-    browser = BROWSER_SAFARI;
-  } else if (userAgent.indexOf('msie') != -1) {
-    if (userAgent.indexOf('5.5') != -1 || userAgent.indexOf('5.0') != -1) {
-      browser = BROWSER_IE_5;
-    } else {
-      browser = BROWSER_IE_6;
-    }
-  } else {
-    browser = BROWSER_MOZILLA;
-  }
-})();
+var browser = navigator.userAgent.toLowerCase().indexOf('webkit') != -1
+    ? BROWSER_SAFARI : BROWSER_MOZILLA;
 
 /**
  * Create a new note object.  You shouldn't need to call this directly, use
@@ -137,11 +120,7 @@ Note.prototype.mouseDown = function(ev) {
     return false;
   }
 
-  var lbutton = false;
-  if (BROWSER_IE_6 == browser || BROWSER_IE_5 == browser) // IE button mapping (1, 2, 4)
-    lbutton = 1 == ev.button;
-  else // mozilla/safari 2 and w3c's button mapping (0, 1, 2)
-    lbutton = 0 == ev.button;
+  var lbutton = 0 == ev.button;
 
   // only the left button should have an event
   // likewise we can disable actions by using meta or ctrl+alt
@@ -403,12 +382,9 @@ Note.prototype.getSize = function()
  */
 Note.prototype.getCorrectedSize = function() {
   var ret = this.getSize();
-
-  if (BROWSER_IE_5 != browser) {
-    var offset = 2*(noteBorder+notePadding);
-    ret.x += offset;
-    ret.y += offset;
-  }
+  var offset = 2*(noteBorder+notePadding);
+  ret.x += offset;
+  ret.y += offset;
   return ret;
 }
 
@@ -537,11 +513,7 @@ Note.prototype.setText = function(str)
   // make images undraggable
   var imgs = elt.getElementsByTagName('img');
   for (i = 0; i < imgs.length; i++) {
-    if (BROWSER_IE_6 == browser || BROWSER_IE_5 == browser) {
-      imgs[i].unselectable = 'on';
-    } else {
-      imgs[i].onmousedown = retFalse;
-    }
+    imgs[i].onmousedown = retFalse;
   }
 
   elt.title = strings.NOTE_TOOLTIP;
@@ -1434,7 +1406,6 @@ var workspace =
       style.left = '';
       style.top = '';
       style.cssFloat = 'left';
-      style.styleFloat = 'left';
       style.display = '';
       style.width = parseInt(exposeSize / 100.0 * parseInt(style.width)) + 'px';
       style.height = parseInt(exposeSize / 100.0 * parseInt(style.height)) + 'px';
@@ -1450,7 +1421,6 @@ var workspace =
       style = get(this.notes[n].id).style;
       style.position = 'absolute';
       style.cssFloat = 'none';
-      style.styleFloat = 'none';
       style.margin = '';
     }
   },
@@ -1496,14 +1466,12 @@ var workspace =
       if (shouldHide(note)) {
         elt.className = 'note';
         if (BROWSER_SAFARI == browser) elt.style.opacity = '0.99';
-        if (BROWSER_IE_5 == browser) elt.style.visibility = 'visible';
         note.enable();
         get('m' + note.id).className = 'mininote';
       } else {
         elt.className = 'noteHide';
         elt.style.zIndex = 0;
         if (BROWSER_SAFARI == browser) elt.style.opacity = '0.2';
-        if (BROWSER_IE_5 == browser) elt.style.visibility = 'hidden';
         note.disable();
         get('m' + note.id).className = 'mininote noteHide';
       }
@@ -1530,7 +1498,6 @@ var workspace =
     // After the first 9 notes, we add space for additional notes
     // 10 is the width of a note.
     var miniNoteWidth = 10;
-    if (BROWSER_IE_5 == browser) miniNoteWidth = 8; // width in IE5.5
     var diff = parseInt(Math.max(0, total - 9) / 2) * miniNoteWidth;
     mini.style.width = (diff + miniWidth) + 'px';
 
@@ -1820,16 +1787,8 @@ function cancelBubble(e) {
 // http://www.web-wise-wizard.com/javascript-tutorials/javascript-mouse-event-handlers.html
 function docMouseMove(e) {
   e = e || window.event;
-  var x, y;
-  if (!e.pageX && !e.pageY) { // IE
-    x = e.x+document.body.scrollLeft;
-    y = e.y+document.body.scrollTop;
-  } else {
-    x = e.pageX;
-    y = e.pageY;
-  }
-  workspace.mouse.update(x, y);
-  workspace.docMove(x, y);
+  workspace.mouse.update(e.pageX, e.pageY);
+  workspace.docMove(e.pageX, e.pageY);
 }
 
 /**
@@ -1941,16 +1900,7 @@ function winBeforeUnload() {
  * @type Point
  */
 function getPageSize() {
-  var ret;
-  if (BROWSER_IE_5 == browser) {
-    ret = new Point(document.body.clientWidth, document.body.clientHeight);
-  } else if (BROWSER_IE_6 == browser) {
-    ret = new Point(document.documentElement.clientWidth,
-            document.documentElement.clientHeight);
-  } else {
-    ret = new Point(window.innerWidth, window.innerHeight);
-  }
-  return ret;
+  return new Point(window.innerWidth, window.innerHeight);
 }
 
 /**

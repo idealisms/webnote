@@ -49,7 +49,6 @@ div.noteHide {
   font-family: Arial, helvetica, sans-serif;
   word-wrap: break-word;
   overflow: auto;
-  filter:alpha(opacity=20);
   opacity: 0.2;
 }
 
