@@ -366,6 +366,10 @@ Note.prototype.destroy = function(addToHistory)
   // resize the mini box and update the stats
   this.parent.updateMiniBox();
 
+  // checks for changes wait while a warning is shown
+  if ('updated' == this.id || 'conflict' == this.id)
+    this.parent.schedulePoll();
+
   // is the garbage collector smart enough to delete the object now?
 }
 /**
@@ -1142,6 +1146,17 @@ var workspace =
    * How frequently we check for changes.
    */
   updateInterval: 1000*60*10,
+  /**
+   * The pending check for changes (see checkUpdated), and whether one is in
+   * flight. There's only ever one of each.
+   */
+  pollTimer: 0,
+  pollRunning: false,
+  /**
+   * The newest save the collision warning has shown, so closing the warning
+   * doesn't bring it back for the same save.
+   */
+  warnedTime: 0,
 
   /**
    * Create a new note. Any of the parameter values may be left blank
@@ -1470,14 +1485,35 @@ var workspace =
     this.notes['load'].setText(txt);
     this.reZOrder('load');
 
+    var failed = function() {
+      workspace.loadlistFailed(offset);
+    };
     fetch('getdates.py?name=' + escape(myescape(this.name))
           + '&offset=' + offset + '&epoch=1').then(function(response) {
-      if (200 == response.status) {
-        return response.text().then(function(text) {
-          workspace.loadlistCallback(text, offset);
-        });
+      if (200 != response.status) {
+        db('getdates: ' + response.status);
+        failed();
+        return;
       }
-    }, function() {});
+      return response.text().then(function(text) {
+        workspace.loadlistCallback(text, offset);
+      });
+    }, failed);
+  },
+
+  loadlistFailed : function(offset) {
+    // the user may have closed the note already
+    if (!this.notes['load'])
+      return;
+    this.notes['load'].setText(strings.LOADVERSIONS_ERROR);
+    var retry = document.createElement('a');
+    retry.className = 'fakelink';
+    retry.textContent = strings.LOADVERSIONS_RETRY;
+    retry.addEventListener('click', function() { workspace.loadlist(offset); });
+    var div = document.createElement('div');
+    div.style.textAlign = 'center';
+    div.appendChild(retry);
+    get('load').appendChild(div);
   },
 
   loadlistCallback : function(text, offset) {
@@ -1545,25 +1581,59 @@ var workspace =
   },
 
   /**
+   * Check for changes again in updateInterval, replacing any pending check.
+   */
+  schedulePoll : function() {
+    window.clearTimeout(this.pollTimer);
+    this.pollTimer = window.setTimeout(function() { workspace.checkUpdated(); },
+                                       this.updateInterval);
+  },
+
+  /**
+   * Is the collision or conflict warning shown?  Checks for changes stop
+   * until it's closed.
+   */
+  warningShown : function() {
+    return 'updated' in this.notes || 'conflict' in this.notes;
+  },
+
+  /**
    * Checks to see if the notes have changed since the last time we loaded
-   * the notes.
+   * the notes.  Hidden tabs skip the check, and check when shown again (see
+   * init).
    */
   checkUpdated : function() {
-    fetch('getrecent.py?name=' + escape(myescape(workspace.name))
+    window.clearTimeout(this.pollTimer);
+    this.pollTimer = 0;
+    if (this.pollRunning || this.warningShown() || 'hidden' == document.visibilityState)
+      return;
+    this.pollRunning = true;
+    var failed = function(status) {
+      db('getrecent: ' + status);
+      workspace.pollRunning = false;
+      workspace.schedulePoll();
+    };
+    fetch('getrecent.py?name=' + escape(myescape(this.name))
           + '&epoch=1').then(function(response) {
-      if (200 == response.status) {
-        return response.text().then(function(text) {
-          db('check updated');
-          workspace.checkUpdatedCallback(text);
-        });
+      if (200 != response.status) {
+        failed(response.status);
+        return;
       }
-    }, function() {});
+      return response.text().then(function(text) {
+        db('check updated');
+        workspace.pollRunning = false;
+        workspace.checkUpdatedCallback(text);
+      });
+    }, function() { failed(0); });
   },
 
   checkUpdatedCallback : function(text) {
     // Times are microseconds since the epoch, exact in a JS number until 2255.
     var loadTime = Number(text.trim());
-    if (loadTime > this.loadedTime) {
+    if (this.warningShown()) {
+      // shown while the check was in flight; closing it checks again
+    } else if (loadTime > Math.max(this.loadedTime, this.warnedTime)) {
+      this.warnedTime = loadTime;
       this.createNote( {
         'id' : 'updated',
         'xPos' : '0',
@@ -1574,8 +1644,64 @@ var workspace =
       });
     } else {
       db('no changes');
-      window.setTimeout(workspace.checkUpdated, workspace.updateInterval);
+      this.schedulePoll();
     }
+  },
+
+  /**
+   * Someone else saved the workspace (at time, in microseconds since the
+   * epoch) after this page loaded it, so the save didn't happen.  Let the
+   * user choose what to do.  Saves keep reporting the conflict until the
+   * user saves anyway.
+   */
+  showConflict : function(time) {
+    // this replaces the collision warning
+    for (var id of ['updated', 'conflict']) {
+      if (this.notes[id])
+        this.notes[id].destroy();
+    }
+    this.createNote( {
+      'id' : 'conflict',
+      'xPos' : '0',
+      'yPos' : '40',
+      'bgcolor' : '#ff6060',
+      'height' : '150',
+      'width' : '300'
+    } );
+    this.notes['conflict'].setText(strings.CONFLICT_WARNING);
+
+    var self = this;
+    var choice = function(text, onclick) {
+      var a = document.createElement('a');
+      a.className = 'fakelink';
+      a.textContent = text;
+      a.addEventListener('click', onclick);
+      var li = document.createElement('li');
+      li.appendChild(a);
+      return li;
+    };
+    var newer = document.createElement('a');
+    newer.href = 'load.py?name=' + escape(myescape(this.name)) + '&time=' + time;
+    newer.target = '_blank';
+    newer.textContent = strings.CONFLICT_OPEN_NEWER;
+    var newerItem = document.createElement('li');
+    newerItem.appendChild(newer);
+    var list = document.createElement('ul');
+    list.addEventListener('mousedown', stopPropagation);
+    list.append(
+      newerItem,
+      choice(strings.CONFLICT_SAVE_ANYWAY, function() {
+        // Base the save on the version it replaces.  If yet another save
+        // landed since, it conflicts again.
+        self.loadedTime = time;
+        self.notes['conflict'].destroy();
+        self.save();
+      }),
+      choice(strings.CONFLICT_RELOAD, function() {
+        self.changed = false;
+        location.href = escape(escape(myescape(self.name)));
+      }));
+    get('conflict').appendChild(list);
   },
 
   /**
@@ -1633,8 +1759,13 @@ var workspace =
       alert(strings.SAVE_STATUS_ERROR);
       get('saveImg').src = 'images/save.gif';
     };
-    fetch('save.py?epoch=1', {method: 'POST', body: workspace.toString()})
-        .then(function(response) {
+    fetch('save.py?epoch=1&loaded=' + this.loadedTime,
+          {method: 'POST', body: workspace.toString()}).then(function(response) {
+      if (409 == response.status) {
+        return response.text().then(function(text) {
+          workspace.saveCallback(text);
+        });
+      }
       if (200 != response.status) {
         failed(response.status);
         return;
@@ -1652,6 +1783,8 @@ var workspace =
       this.changed = false;
       get('saveImg').className = 'controlsDisabled';
       this.loadedTime = Number(status.getAttribute('update'));
+    } else if (status && 'conflict' == status.getAttribute('value')) {
+      this.showConflict(Number(status.getAttribute('update')));
     } else {
       alert(strings.SAVE_SERVER_ERROR.replace("$1", adminEmail));
     }
@@ -1746,7 +1879,12 @@ function init()
   get('rsslink').title = strings.RSS_LINK_TITLE;
 
   // periodically check for updates (every 10 minutes)
-  window.setTimeout(workspace.checkUpdated, workspace.updateInterval);
+  workspace.schedulePoll();
+  // A hidden tab skips its check; check when it's shown again.
+  document.addEventListener('visibilitychange', function() {
+    if ('visible' == document.visibilityState && !workspace.pollTimer)
+      workspace.checkUpdated();
+  });
 }
 
 function stopPropagation(e) {

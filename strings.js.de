@@ -52,8 +52,14 @@ var strings = {
   LOADVERSIONS_DATE_NOTE: 'alle Zeiten in Ihrer Zeitzone',
   LOADVERSIONS_INIT: 'Rufe versionen ab...',
   LOADVERSIONS_NONE: 'Keine Versionen gefunden.  Keine Notizen wurden auf diesem Arbeitsplatz gespeichert.',
+  LOADVERSIONS_ERROR: 'Die Versionen konnten nicht abgerufen werden.',
+  LOADVERSIONS_RETRY: 'erneut versuchen',
 
   COLLISION_WARNING: "Dieser Arbeitsplatz wurde von jemand anderem ver\u00E4ndert w\u00E4hrend Du daran gearbeitet hast. Wenn Du sehen willst wie der Arbeitsplatz jetzt aussieht, kannst Du den<a href='$1' target='_new'>Arbeitsplatz in einem neuen Fenster \u00F6ffnen</a>.",
+  CONFLICT_WARNING: 'Jemand anderes hat diesen Arbeitsplatz gespeichert, nachdem Du ihn geladen hast. Deine Notizen wurden deshalb nicht gespeichert.',
+  CONFLICT_OPEN_NEWER: 'Die neuere Version in einem neuen Tab \u00F6ffnen',
+  CONFLICT_SAVE_ANYWAY: 'Meine trotzdem speichern',
+  CONFLICT_RELOAD: 'Die neuere Version laden (meine \u00C4nderungen verwerfen)',
   
   SAVE_STATUS_ERROR: 'Speichern der Notizen ist fehlgeschlagen.  Bitte stelle sicher das du eine Verbindung mit dem Internet hast und versuche es erneut.',
   // $1 is the email address of the admin

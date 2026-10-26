@@ -10,16 +10,18 @@ which isn't in requirements-dev.txt.
 
 For each workspace, each browser loads it from the home page's form, creates a
 note, edits and saves it twice, reloads, loads the older revision from the
-history list, and runs the collision check. Then it closes its note and saves,
-so the latest revision has the notes it started with (smoketest.py only saves to
-a workspace whose latest revision is its own note). The browsers run one after
+history list, and runs the collision check. A second tab then saves first, so
+the first tab's save conflicts until it saves anyway. Then it closes its note
+and saves, so the latest revision has the notes it started with (smoketest.py
+only saves to a workspace whose latest revision is its own note). The browsers run one after
 the other on the same workspaces, and each must see what the previous one left:
 names are escaped the same way in every browser. Any alert or JavaScript error
 fails the test.
 
 Before that, run_ui() drives the note interactions (dragging, resizing,
-colors, editing, deleting, undo/redo, the mini notes, the filter and keyboard
-shortcuts) on an empty workspace, without saving.
+colors, editing, deleting, undo/redo, the mini notes, the filter, keyboard
+shortcuts, and failed history requests and saves) on an empty workspace,
+without saving.
 
 Against anything but localhost, only workspaces whose names start with
 webnote_smoketest are allowed, since the test saves to them.
@@ -153,6 +155,39 @@ def run(browser, base, name, previous):
     page.goto(workspace_page)
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
     check(page.evaluate('workspace.loadedTime') == second_time, 'reopens the latest revision')
+
+    # Concurrent saves: another tab saves first, so this tab's save conflicts.
+    other = browser.new_page(timezone_id='Asia/Tokyo')
+    other.on('pageerror', lambda e: problems.append('JavaScript error: %s' % e))
+    other.goto(workspace_page)
+    other.wait_for_function("typeof workspace != 'undefined' && workspace.name")
+    third_time = edit_and_save(other, note_id, TEXT % (run_id + ' third'))
+    third_text = other.evaluate('workspace.notes[%r].text' % note_id)
+    page.dblclick('#' + note_id)
+    page.fill('#%stext' % note_id, TEXT % (run_id + ' mine'))
+    page.mouse.click(700, 550)
+    mine_text = page.evaluate('workspace.notes[%r].text' % note_id)
+    page.click('#saveImg')
+    page.wait_for_selector('#conflict ul')
+    check(page.evaluate('workspace.loadedTime') == second_time
+          and page.evaluate('workspace.changed'), 'a save after another tab saved conflicts')
+    newer = page.get_attribute('#conflict a[target=_blank]', 'href')
+    other.goto(urllib.parse.urljoin(page.url, newer))
+    other.wait_for_function("typeof workspace != 'undefined' && workspace.name")
+    check(other.evaluate('workspace.notes[%r].text' % note_id) == third_text,
+          'the conflict links to the other tab\'s revision')
+    other.close()
+    page.locator('#conflict').get_by_text(
+        page.evaluate('strings.CONFLICT_SAVE_ANYWAY'), exact=True).click()
+    wait_for_save(page)
+    check(page.evaluate('workspace.loadedTime') > third_time
+          and not page.evaluate("'conflict' in workspace.notes"), 'save anyway saves')
+    page.reload()
+    page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
+    check(page.evaluate('workspace.notes[%r].text' % note_id) == mine_text
+          and not page.evaluate("'conflict' in workspace.notes"),
+          'and stores this tab\'s notes, without the warning')
+
     page.dblclick('#' + note_id)
     page.click('#%s img[src="images/close.gif"]' % note_id)
     page.wait_for_function("get('saveImg').className == 'controls'")
@@ -233,9 +268,11 @@ def run_ui(browser, base, name):
     page.on('pageerror', lambda e: problems.append('JavaScript error: %s' % e))
     # Saves never reach the server: save_response says what they get.
     saves = []
+    save_bodies = []
     save_response = {}
     def on_save(route):
         saves.append(route.request.url)
+        save_bodies.append(route.request.post_data)
         if save_response:
             route.fulfill(**save_response)
         else:
@@ -449,6 +486,22 @@ def run_ui(browser, base, name):
           'no inline event handlers')
     page.evaluate("workspace.notes['load'].destroy()")
 
+    # A failed getdates.py says so, and retrying lists the times.
+    page.unroute('**/getdates.py*')
+    page.route('**/getdates.py*', lambda route: route.fulfill(status=500, body='error'))
+    page.click('#reloadImg')
+    retry = page.locator('#load a.fakelink')
+    retry.wait_for()
+    check(retry.all_text_contents() == [page.evaluate('strings.LOADVERSIONS_RETRY')]
+          and page.evaluate("workspace.notes['load'].text == strings.LOADVERSIONS_ERROR"),
+          'a failed history request shows an error and a retry link')
+    page.unroute('**/getdates.py*')
+    page.route('**/getdates.py*', on_getdates)
+    retry.click()
+    page.wait_for_selector('#load select.loadfrm')
+    check(True, 'retrying lists the times')
+    page.evaluate("workspace.notes['load'].destroy()")
+
     # A failed save says so, and the workspace stays unsaved.
     alert = page.evaluate('strings.SAVE_STATUS_ERROR')
     server_alert = page.evaluate('strings.SAVE_SERVER_ERROR.replace("$1", adminEmail)')
@@ -479,7 +532,49 @@ def run_ui(browser, base, name):
     page.wait_for_function("'updated' in workspace.notes")
     check(True, 'a newer save on the server shows the collision warning')
 
-    check(len(saves) == 3, 'only the failed saves were tried')
+    # A save conflict replaces it, until the user saves anyway.
+    loaded = page.evaluate('workspace.loadedTime')
+    save_response.clear()
+    save_response.update(status=409, content_type='text/xml',
+                         body='<return><status value="conflict" update="%d"/></return>' % newer)
+    page.click('#saveImg')
+    page.wait_for_selector('#conflict ul')
+    check(saves[-1].endswith('save.py?epoch=1&loaded=%d' % loaded)
+          and not page.evaluate("'updated' in workspace.notes"),
+          'a save sends loadedTime, and a conflict replaces the collision warning')
+    check(page.get_attribute('#conflict a[target=_blank]', 'href')
+          == 'load.py?name=%s&time=%d' % (page.evaluate('escape(myescape(workspace.name))'), newer),
+          'the conflict links to the newer revision')
+    page.click('#saveImg')
+    page.wait_for_function("get('saveImg').src.indexOf('saving') < 0")
+    check(len(saves) == 5 and page.locator('#conflict ul').count() == 1
+          and page.evaluate("get('saveImg').className") == 'controls',
+          'saving again still conflicts')
+    save_response.update(status=200, body='<return><status value="ok" update="%d"/></return>'
+                         % (newer + 1))
+    page.locator('#conflict').get_by_text(
+        page.evaluate('strings.CONFLICT_SAVE_ANYWAY'), exact=True).click()
+    wait_for_save(page)
+    check(saves[-1].endswith('&loaded=%d' % newer) and "noteid='conflict'" not in save_bodies[-1]
+          and page.evaluate('workspace.loadedTime') == newer + 1
+          and not page.evaluate("'conflict' in workspace.notes"),
+          'save anyway saves from the newer revision, without the warning note')
+    # Loading their version leaves without asking.
+    save_response.update(status=409, body='<return><status value="conflict" update="%d"/></return>'
+                         % (newer + 2))
+    page.click('#newImg')
+    page.click('#saveImg')
+    page.wait_for_selector('#conflict ul')
+    del dialogs[:]
+    with page.expect_navigation():
+        page.locator('#conflict').get_by_text(
+            page.evaluate('strings.CONFLICT_RELOAD'), exact=True).click()
+    page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
+    check(not dialogs and page.evaluate('workspace.name') == name,
+          'loading their version opens the workspace without asking')
+    page.click('#newImg')
+
+    check(len(saves) == 7, 'only the failed and conflicting saves were tried')
     check(not dialogs and not problems, 'no other alerts or JavaScript errors%s' % (
         '' if not (dialogs or problems) else ': %s' % (dialogs + problems)))
     page.goto(base + '/webnote/')

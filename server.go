@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -61,7 +62,7 @@ type server struct {
 	project string // for grouping log lines with requests
 	version string // GAE_VERSION
 	now     func() time.Time
-	save    func(context.Context, *datastore.Client, string, int64, []note, func() time.Time) (*Workspace, error)
+	save    func(context.Context, *datastore.Client, string, int64, []note, int64, func() time.Time) (*Workspace, error)
 }
 
 // webapp2 answers 501 for methods outside this set, before routing.
@@ -433,8 +434,26 @@ func (s *server) saveHandler(req *request) {
 		}
 		nextNoteNum = n.Int64()
 	}
-	ws, err := s.save(req.r.Context(), s.client, save.name, nextNoteNum, save.notes, s.now)
-	if errors.Is(err, errTransactionFailed) {
+	// loaded is the client's workspace.loadedTime. Clients loaded before it
+	// was sent don't check for conflicts.
+	loaded := int64(-1)
+	if v, ok := req.params.lookup("loaded"); ok {
+		loaded, err = strconv.ParseInt(v, 10, 64)
+		if err != nil || loaded < 0 {
+			s.badRequest(req, fmt.Errorf("loaded=%q", v))
+			return
+		}
+	}
+	ws, err := s.save(req.r.Context(), s.client, save.name, nextNoteNum, save.notes, loaded, s.now)
+	if errors.Is(err, errConflict) {
+		// Someone else saved since this client loaded the workspace. The
+		// client can save again with this time as loaded.
+		slog.Info("save conflict", "name", save.name, traceAttr(s.project, req.r))
+		req.w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+		req.w.WriteHeader(http.StatusConflict)
+		io.WriteString(req.w, `<return><status value="conflict" update="`+req.formatTime(ws.Time)+`"/></return>`)
+		return
+	} else if errors.Is(err, errTransactionFailed) {
 		slog.Error("Failed to save workspace", "name", save.name, "error", err,
 			traceAttr(s.project, req.r))
 		req.w.Header().Set("Content-Type", "text/xml; charset=utf-8")

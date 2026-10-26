@@ -161,3 +161,85 @@ test('NotePos cascades new notes and wraps at the window edge', () => {
   pos.nextPos(250, 150);
   assert.equal(pos.nextPos(250, 150).toString(), '(40, 40)');
 });
+
+// The poll for saves from other clients, with timers and getrecent.py stubbed.
+function loadPolling() {
+  const ctx = load();
+  const timers = new Map();
+  let nextTimer = 1;
+  ctx.window.setTimeout = (f, ms) => {
+    timers.set(nextTimer, f);
+    return nextTimer++;
+  };
+  ctx.window.clearTimeout = id => timers.delete(id);
+  ctx.document.visibilityState = 'visible';
+  const requests = [];  // resolve or reject each to answer it
+  ctx.fetch = url => new Promise((resolve, reject) => requests.push({url, resolve, reject}));
+  const ws = ctx.workspace;
+  ws.name = 'ws';
+  ws.loadedTime = 100;
+  ws.createNote = note => { ws.notes[note.id] = note; };
+  const answer = async (status, text) => {
+    requests.shift().resolve({status, text: async () => text});
+    await new Promise(setImmediate);
+  };
+  const fire = () => {
+    assert.equal(timers.size, 1, 'one pending check');
+    const [[id, f]] = timers;
+    timers.delete(id);
+    f();
+  };
+  return {ctx, ws, timers, requests, answer, fire};
+}
+
+test('checkUpdated keeps one check going, through failures', async () => {
+  const {ctx, ws, timers, requests, answer, fire} = loadPolling();
+  ws.schedulePoll();
+  ws.schedulePoll();
+  fire();
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /^getrecent\.py\?name=ws&epoch=1$/);
+  ws.checkUpdated();
+  assert.equal(requests.length, 1, 'no second check while one is in flight');
+  await answer(500, 'error');
+  fire();
+  requests.shift().reject(new Error('network'));
+  await new Promise(setImmediate);
+  fire();
+  await answer(200, '100');
+  assert.equal(timers.size, 1, 'no change: check again later');
+  assert.ok(!('updated' in ws.notes));
+
+  // A hidden tab skips the check and leaves no timer, for visibilitychange.
+  ctx.document.visibilityState = 'hidden';
+  fire();
+  assert.equal(requests.length, 0);
+  assert.equal(timers.size, 0);
+  assert.equal(ws.pollTimer, 0);
+});
+
+test('checkUpdated stops while the warning is shown', async () => {
+  const {ws, timers, requests, answer, fire} = loadPolling();
+  ws.checkUpdated();
+  await answer(200, '200');
+  assert.ok('updated' in ws.notes, 'a newer save shows the warning');
+  assert.equal(timers.size, 0);
+  ws.checkUpdated();
+  assert.equal(requests.length, 0, 'no checks while it is shown');
+
+  // Closing it checks again, and the same save doesn't warn twice.
+  delete ws.notes.updated;
+  ws.schedulePoll();
+  fire();
+  await answer(200, '200');
+  assert.ok(!('updated' in ws.notes));
+  fire();
+  await answer(200, '300');
+  assert.ok('updated' in ws.notes, 'a newer one does');
+
+  // A conflict warning stops checks too.
+  delete ws.notes.updated;
+  ws.notes.conflict = {};
+  ws.checkUpdated();
+  assert.equal(requests.length, 0);
+});

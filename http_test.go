@@ -407,10 +407,31 @@ var fixedSincePython = map[string]fixedResponse{
 }
 
 // stringsSincePython are changes to strings.js since the port, applied to
-// Python's responses: times are shown in the browser's time zone.
+// Python's responses: times are shown in the browser's time zone, and the
+// history note's error and the save conflict warning are new.
 var stringsSincePython = strings.NewReplacer(
 	"all times are US Eastern Time (-0500)", "times are in your time zone",
 	"alle Zeiten sind in US Eastern Time (-0500)", "alle Zeiten in Ihrer Zeitzone",
+	"saved to this workspace.',\n", "saved to this workspace.',\n"+
+		`  LOADVERSIONS_ERROR: 'Couldn\'t retrieve the version history.',
+  LOADVERSIONS_RETRY: 'try again',
+`,
+	"Arbeitsplatz gespeichert.',\n", "Arbeitsplatz gespeichert.',\n"+
+		`  LOADVERSIONS_ERROR: 'Die Versionen konnten nicht abgerufen werden.',
+  LOADVERSIONS_RETRY: 'erneut versuchen',
+`,
+	"open it in a new window</a>.\",\n", "open it in a new window</a>.\",\n"+
+		`  CONFLICT_WARNING: 'Someone else saved this workspace after you loaded it, so your notes were not saved.',
+  CONFLICT_OPEN_NEWER: 'Open their version in a new tab',
+  CONFLICT_SAVE_ANYWAY: 'Save mine anyway',
+  CONFLICT_RELOAD: 'Load their version (discard my changes)',
+`,
+	"Fenster \\u00F6ffnen</a>.\",\n", "Fenster \\u00F6ffnen</a>.\",\n"+
+		`  CONFLICT_WARNING: 'Jemand anderes hat diesen Arbeitsplatz gespeichert, nachdem Du ihn geladen hast. Deine Notizen wurden deshalb nicht gespeichert.',
+  CONFLICT_OPEN_NEWER: 'Die neuere Version in einem neuen Tab \u00F6ffnen',
+  CONFLICT_SAVE_ANYWAY: 'Meine trotzdem speichern',
+  CONFLICT_RELOAD: 'Die neuere Version laden (meine \u00C4nderungen verwerfen)',
+`,
 )
 
 // badSaveSincePython reports whether a golden case is a save that Python
@@ -520,7 +541,7 @@ func TestHTTPMatchesPython(t *testing.T) {
 func TestSaveTransactionFailure(t *testing.T) {
 	ctx, client := newTestClient(t)
 	s := newTestServer(client, time.Now())
-	s.save = func(context.Context, *datastore.Client, string, int64, []note, func() time.Time) (*Workspace, error) {
+	s.save = func(context.Context, *datastore.Client, string, int64, []note, int64, func() time.Time) (*Workspace, error) {
 		return nil, fmt.Errorf("%w: test", errTransactionFailed)
 	}
 	r := httptest.NewRequest("POST", "/webnote/save.py", strings.NewReader("<workspace name='ws' nextNoteNum='1'></workspace>"))
@@ -571,6 +592,63 @@ func TestSaveUpdateMatchesGetRecent(t *testing.T) {
 	s.ServeHTTP(recent, httptest.NewRequest("GET", "/webnote/getrecent.py?name=ws", nil))
 	if want := `<return><status value="ok" update="` + recent.Body.String() + `"/></return>`; saved.Body.String() != want || recent.Body.Len() != 19 {
 		t.Errorf("save = %q, getrecent = %q", saved.Body.String(), recent.Body.String())
+	}
+}
+
+func TestSaveConflict(t *testing.T) {
+	ctx, client := newTestClient(t)
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	s := &server{client: client, now: func() time.Time { return now }, save: saveWorkspace}
+	save := func(query string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/webnote/save.py?epoch=1"+query, strings.NewReader(
+			"<workspace name='ws' nextNoteNum='1'><note noteid='n'>x</note></workspace>"))
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, r)
+		return rec
+	}
+	var latest time.Time // the stored workspace's time
+	for _, c := range []struct {
+		query  string
+		status int // 200 saves, 409 reports latest
+	}{
+		// A new workspace saves from 0, the page's loadedTime without one.
+		{"&loaded=0", 200},
+		// A page loaded before that save conflicts and writes nothing.
+		{"&loaded=0", 409},
+		{"&loaded=OLDER", 409},
+		// Saving from the stored time, as "save anyway" does, works.
+		{"&loaded=LATEST", 200},
+		// Clients that don't send loaded replace whatever is there.
+		{"", 200},
+		{"&loaded=x", 400},
+		{"&loaded=-1", 400},
+	} {
+		now = now.Add(time.Microsecond)
+		query := strings.NewReplacer("OLDER", epochMicros(latest.Add(-time.Microsecond)),
+			"LATEST", epochMicros(latest)).Replace(c.query)
+		rec := save(query)
+		want := ""
+		switch c.status {
+		case 200:
+			latest = now
+			want = `<return><status value="ok" update="` + epochMicros(latest) + `"/></return>`
+		case 409:
+			want = `<return><status value="conflict" update="` + epochMicros(latest) + `"/></return>`
+		case 400:
+			want = "400 Bad Request\n"
+		}
+		if rec.Code != c.status || rec.Body.String() != want {
+			t.Errorf("save %q: got %d %q, want %d %q", query, rec.Code, rec.Body.String(), c.status, want)
+		}
+		ws, err := getWorkspace(ctx, client, "ws")
+		if err != nil || !ws.Time.Equal(latest) {
+			t.Errorf("save %q: stored workspace %+v, %v; want time %v", query, ws, err, latest)
+		}
+	}
+	// Only the three successful saves wrote revisions.
+	ws, _ := getWorkspace(ctx, client, "ws")
+	if times, err := notesTimes(ctx, client, ws.Key, 0, 11); err != nil || len(times) != 3 {
+		t.Errorf("notesTimes = %v, %v", times, err)
 	}
 }
 

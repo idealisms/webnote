@@ -114,10 +114,21 @@ func notesTimes(ctx context.Context, client *datastore.Client, key *datastore.Ke
 // ndb's TransactionFailedError.
 var errTransactionFailed = errors.New("transaction failed")
 
+// errConflict is when someone else saved the workspace after the client
+// loaded it. saveWorkspace returns it with the stored workspace.
+var errConflict = errors.New("saved since loaded")
+
 // saveWorkspace saves a revision of a workspace, creating the workspace if
 // needed, and returns the workspace. Times are exact (to Datastore's
 // microseconds), so the time in the response is the stored one.
-func saveWorkspace(ctx context.Context, client *datastore.Client, name string, nextNoteNum int64, notes []note, now func() time.Time) (*Workspace, error) {
+//
+// loaded is the workspace time the client's notes are based on, in
+// microseconds since the epoch (0 for a workspace that didn't exist). If the
+// stored workspace is newer, nothing is written and saveWorkspace returns the
+// stored workspace and errConflict. The check is inside the transaction, so a
+// concurrent save forces a retry that sees its time. A negative loaded skips
+// the check, for clients that don't send it.
+func saveWorkspace(ctx context.Context, client *datastore.Client, name string, nextNoteNum int64, notes []note, loaded int64, now func() time.Time) (*Workspace, error) {
 	blob, err := encodeNotes(notes)
 	if err != nil {
 		return nil, err
@@ -132,6 +143,8 @@ func saveWorkspace(ctx context.Context, client *datastore.Client, name string, n
 			w.Name = canonicalWsName(name)
 		} else if err != nil {
 			return err
+		} else if loaded >= 0 && w.Time.UnixMicro() > loaded {
+			return errConflict
 		}
 		w.Time = now
 		w.NextNoteNum = nextNoteNum
