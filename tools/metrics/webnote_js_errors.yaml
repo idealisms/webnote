@@ -1,0 +1,15 @@
+# Uncaught client errors reported to /webnote/jserror (jsError() in
+# server.go), by the version of webnote.js that sent them.
+description: Webnote client JavaScript errors, by client version
+filter: >-
+  log_id("stdout") AND resource.type="gae_app"
+  AND jsonPayload.serviceContext.service="webnote-client"
+labelExtractors:
+  version: EXTRACT(jsonPayload.serviceContext.version)
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"
+  labels:
+  - key: version
+    valueType: STRING

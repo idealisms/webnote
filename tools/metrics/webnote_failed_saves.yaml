@@ -1,0 +1,10 @@
+# Saves whose Datastore transaction failed (saveHandler() in server.go logs
+# "Failed to save workspace").
+description: Webnote saves that failed in the transaction
+filter: >-
+  log_id("stdout") AND resource.type="gae_app"
+  AND jsonPayload.message="Failed to save workspace"
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"

@@ -1,0 +1,14 @@
+# Requests answered with a 5xx, by status, from the request log. Includes
+# requests App Engine aborts before they reach the app.
+description: Webnote 5xx responses, by HTTP status
+filter: >-
+  log_id("appengine.googleapis.com/request_log") AND protoPayload.status>=500
+labelExtractors:
+  status: EXTRACT(protoPayload.status)
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"
+  labels:
+  - key: status
+    valueType: STRING

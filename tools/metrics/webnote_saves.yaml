@@ -1,0 +1,15 @@
+# Saves (POST save.py), by response status: 200 saved, 409 conflict, 500
+# failed.
+description: Webnote saves, by HTTP status
+filter: >-
+  log_id("appengine.googleapis.com/request_log")
+  AND protoPayload.method="POST" AND protoPayload.resource=~"^/webnote/save\.py"
+labelExtractors:
+  status: EXTRACT(protoPayload.status)
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"
+  labels:
+  - key: status
+    valueType: STRING

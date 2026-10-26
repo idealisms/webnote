@@ -1,0 +1,15 @@
+# Workspace pages served (GET 200 on /webnote/NAME or load.py), from the
+# request log. Includes bots and the smoke and browser tests. No label for
+# the workspace: count active workspaces with Log Analytics instead
+# (README.md in this directory).
+description: Webnote workspace page loads
+filter: >-
+  log_id("appengine.googleapis.com/request_log")
+  AND protoPayload.method="GET" AND protoPayload.status=200
+  AND (protoPayload.resource=~"^/webnote/load\.py\?"
+    OR (protoPayload.resource=~"^/webnote/[^?]+"
+      AND NOT protoPayload.resource=~"^/webnote/([^?]*\.(xml|py|js|css|ico|png|gif|svg|html|txt|webmanifest)(\?|$)|(images|icons)/)"))
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"
