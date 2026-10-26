@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <!-- Four notes in the first four note colors, as in the original 16x16
+       webnote_favicon.ico. tools/make_icons.py renders the PNGs and the ICO
+       from this file. -->
+  <rect x="0.5" y="0.5" width="7" height="7" fill="#ffff30" stroke="#40400c"/>
+  <rect x="8.5" y="0.5" width="7" height="7" fill="#8facff" stroke="#242b40"/>
+  <rect x="0.5" y="8.5" width="7" height="7" fill="#7fff70" stroke="#20401c"/>
+  <rect x="8.5" y="8.5" width="7" height="7" fill="#ff6060" stroke="#401818"/>
+</svg>

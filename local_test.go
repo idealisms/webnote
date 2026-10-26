@@ -17,14 +17,17 @@ func TestStaticFilesFromAppYAML(t *testing.T) {
 	})
 	h := withStaticFiles(handlers, next)
 	for path, file := range map[string]string{
-		"/webnote/":               "index.html",
-		"/webnote/webnote.js":     "webnote.js",
-		"/webnote/FAQ.html":       "FAQ.html",
-		"/robots.txt":             "robots.txt",
-		"/webnote/images/new.gif": "images/new.gif",
-		"/webnote/strings.js":     "",
-		"/webnote/webnote%2Ejs":   "webnote.js",
-		"/webnote/webnoteXjs":     "",
+		"/webnote/":                           "index.html",
+		"/webnote/webnote.js":                 "webnote.js",
+		"/webnote/FAQ.html":                   "FAQ.html",
+		"/robots.txt":                         "robots.txt",
+		"/webnote/images/new.gif":             "images/new.gif",
+		"/favicon.ico":                        "webnote_favicon.ico",
+		"/webnote/icons/favicon.svg":          "icons/favicon.svg",
+		"/webnote/icons/manifest.webmanifest": "icons/manifest.webmanifest",
+		"/webnote/strings.js":                 "",
+		"/webnote/webnote%2Ejs":               "webnote.js",
+		"/webnote/webnoteXjs":                 "",
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))

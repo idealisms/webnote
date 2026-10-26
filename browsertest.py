@@ -122,6 +122,12 @@ def run(browser, base, name, previous):
           == first_text, 'the note survives a reload')
     check(page.evaluate('workspace.loadedTime') == first_time,
           'the page shows the save time')
+    icons = page.eval_on_selector_all(
+        'link[rel~=icon], link[rel=apple-touch-icon], link[rel=manifest]', 'ls => ls.map(l => l.href)')
+    responses = [page.request.get(href) for href in icons]
+    check(len(icons) == 4 and all(r.status == 200 and r.body() for r in responses)
+          and responses[-1].json()['icons'][0]['src'] == 'icon-192.png',
+          'the favicons and the web manifest load')
     feed = page.request.get(page.evaluate("get('rsslink').href"))
     check(feed.status == 200 and '#%s</guid>' % note_id in feed.text()
           and page.evaluate('escape(escape(myescape(workspace.name)))') in feed.text(),

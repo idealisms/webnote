@@ -243,8 +243,16 @@ var pageValuePatterns = []*regexp.Regexp{
 // them byte for byte.
 var pageScripts = regexp.MustCompile(`(?s)\n    <script .*</script>\n`)
 
-var inlineHandlersSincePython = strings.NewReplacer(
+// pageSincePython are changes to the page's markup since Python, applied to
+// Python's page: event handlers are added by webnote.js instead of inline
+// attributes, and the favicon links.
+var pageSincePython = strings.NewReplacer(
 	"<body onload='loadinit();' ", "<body ",
+	`<link rel="SHORTCUT ICON" href="webnote_favicon.ico" type="image/x-icon">`,
+	`<link rel="icon" href="webnote_favicon.ico" sizes="32x32">
+    <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="manifest" href="icons/manifest.webmanifest">`,
 	` onchange='workspace.filter(this.value)' onkeydown='if(13==event.keyCode){workspace.filter(this.value);}; event.cancelBubble=true;'/>`, " />",
 )
 
@@ -262,9 +270,7 @@ func checkPage(t *testing.T, c *httpCase, got, want []byte) {
 		gotSkeleton = p.ReplaceAllString(gotSkeleton, "@@icons@@")
 		wantSkeleton = p.ReplaceAllString(wantSkeleton, "@@icons@@")
 	}
-	// Since Python, the page's event handlers are added by webnote.js
-	// instead of inline attributes.
-	wantSkeleton = inlineHandlersSincePython.Replace(wantSkeleton)
+	wantSkeleton = pageSincePython.Replace(wantSkeleton)
 	var gotValues, wantValues []string
 	for _, p := range pageValuePatterns {
 		gm, wm := p.FindStringSubmatchIndex(gotSkeleton), p.FindStringSubmatchIndex(wantSkeleton)

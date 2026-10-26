@@ -21,6 +21,18 @@ handlers:
 - url: /webnote/webnote_favicon\.ico
   static_files: webnote_favicon.ico
   upload: webnote_favicon\.ico
+# Browsers ask for /favicon.ico on pages without an icon link (the feed).
+- url: /favicon\.ico
+  static_files: webnote_favicon.ico
+  upload: webnote_favicon\.ico
+# icons/: the SVG favicon, the PNGs for phones and the web manifest (see
+# tools/make_icons.py).
+- url: /webnote/icons/manifest\.webmanifest
+  static_files: icons/manifest.webmanifest
+  upload: icons/manifest\.webmanifest
+  mime_type: application/manifest+json
+- url: /webnote/icons
+  static_dir: icons
 - url: /webnote/wp-layout\.css
   static_files: wp-layout.css
   upload: wp-layout\.css
