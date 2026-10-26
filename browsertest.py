@@ -28,6 +28,7 @@ webnote_smoketest are allowed, since the test saves to them.
 """
 
 import argparse
+import json
 import sys
 import time
 import urllib.parse
@@ -597,6 +598,24 @@ def run_ui(browser, base, name):
     check(not dialogs and page.evaluate('workspace.name') == name,
           'loading their version opens the workspace without asking')
     page.click('#newImg')
+
+    # An uncaught error goes to the error beacon, without the page's URL.
+    # The beacon is answered here, so test errors don't reach the logs.
+    page.route('**/webnote/jserror', lambda route: route.fulfill(status=204))
+    with page.expect_event('pageerror'), page.expect_request('**/webnote/jserror') as beacon:
+        page.add_script_tag(content="setTimeout(() => { throw new Error('browsertest error'); });")
+    report = json.loads(beacon.value.post_data)
+    module_url = page.evaluate(
+        "JSON.parse(document.querySelector('script[type=importmap]').text).imports['./webnote.js']")
+    version = urllib.parse.parse_qs(urllib.parse.urlsplit(module_url).query).get('v', [''])[0]
+    # Chromium gives an injected script no source; Firefox gives the page's
+    # URL with " line N > injectedScript".
+    source_ok = report['source'] in ('', 'page') or report['source'].startswith('page ')
+    check(report['message'] == 'Error: browsertest error' and source_ok
+          and report['version'] == version
+          and urllib.parse.urlsplit(page.url).path not in beacon.value.post_data,
+          'an uncaught error is reported, without the page URL (%r)' % report)
+    problems[:] = [p for p in problems if 'browsertest error' not in p]
 
     check(len(saves) == 7, 'only the failed and conflicting saves were tried')
     check(not dialogs and not problems, 'no other alerts or JavaScript errors%s' % (

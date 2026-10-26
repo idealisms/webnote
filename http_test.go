@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"log/slog"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -913,5 +914,85 @@ func TestPageFeedLink(t *testing.T) {
 				t.Errorf("%s: RSS link %s is a %d without %s", path, link, feed.Code, want)
 			}
 		}
+	}
+}
+
+func TestJSError(t *testing.T) {
+	var buf bytes.Buffer
+	defer slog.SetDefault(slog.Default())
+	slog.SetDefault(newCloudLogger(&buf))
+	s := &server{project: "webnote-184120"}
+	post := func(body string) int {
+		r := httptest.NewRequest("POST", "/webnote/jserror", strings.NewReader(body))
+		r.Header.Set("User-Agent", "test-agent")
+		r.Header.Set("X-Cloud-Trace-Context", "abc/1;o=1")
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, r)
+		return rec.Code
+	}
+	report := func(fields map[string]any) string {
+		b, err := json.Marshal(fields)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	v8 := "TypeError: x is undefined\n    at f (https://e.com/webnote/webnote.js?v=1:10:5)"
+	firefox := "f@https://e.com/webnote/webnote.js?v=1:10:5\n"
+	for _, body := range []string{
+		report(map[string]any{"message": "TypeError: x is undefined", "stack": v8, "version": "20261026t1"}),
+		report(map[string]any{"message": "TypeError: x is undefined", "stack": firefox, "version": "20261026t1"}),
+		report(map[string]any{"message": "oops", "source": "https://e.com/webnote/webnote.js?v=1", "line": 3, "col": 7}),
+		report(map[string]any{"message": strings.Repeat("m", 600), "stack": strings.Repeat("s", 5000)}),
+		"not json",
+		`{"message": ""}`,
+		report(map[string]any{"message": "too big", "stack": strings.Repeat("s", 9000)}),
+	} {
+		if code := post(body); code != 204 {
+			t.Errorf("%.40s: got %d, want 204", body, code)
+		}
+	}
+
+	var lines []map[string]any
+	dec := json.NewDecoder(&buf)
+	for dec.More() {
+		var line map[string]any
+		if err := dec.Decode(&line); err != nil {
+			t.Fatal(err)
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) != 4 {
+		t.Fatalf("got %d log lines, want 4 (bad and oversized reports dropped): %v", len(lines), lines)
+	}
+	want := map[string]any{
+		"severity": "ERROR",
+		"message":  v8,
+		"@type":    errorEventType,
+		"serviceContext": map[string]any{
+			"service": "webnote-client", "version": "20261026t1"},
+		"context": map[string]any{
+			"httpRequest": map[string]any{"userAgent": "test-agent"}},
+		"logging.googleapis.com/trace": "projects/webnote-184120/traces/abc",
+	}
+	if !reflect.DeepEqual(lines[0], want) {
+		t.Errorf("got %v\nwant %v", lines[0], want)
+	}
+	for i, message := range []string{
+		"TypeError: x is undefined\n" + firefox,
+		"oops\n    at https://e.com/webnote/webnote.js?v=1:3:7",
+	} {
+		if got := lines[i+1]["message"]; got != message {
+			t.Errorf("message %d: got %q, want %q", i+1, got, message)
+		}
+	}
+	if got := lines[3]["message"].(string); len(got) != 500+1+4000 {
+		t.Errorf("long fields: got a %d-byte message, want 4501", len(got))
+	}
+
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest("GET", "/webnote/jserror", nil))
+	if rec.Code != 405 || rec.Header().Get("Allow") != "POST" {
+		t.Errorf("GET: got %d, Allow %q", rec.Code, rec.Header().Get("Allow"))
 	}
 }

@@ -1836,6 +1836,7 @@ export const workspace =
  */
 export function init()
 {
+  reportErrors(window);
   if (debugOn) {
     const debug = document.createElement('textarea');
     debug.id = 'debug';
@@ -2028,6 +2029,47 @@ function docKeyDown(ev) {
       n.keyDown(ev);
     }
   }
+}
+
+// The deployed version, from the ?v= the page puts on the module URLs.
+const version = new URL(import.meta.url).searchParams.get('v') || '';
+// The most errors one page reports, so a polling loop that keeps failing
+// doesn't send a report every few seconds.
+const maxErrorReports = 5;
+
+/**
+ * Report uncaught errors to the server (jserror in server.go), each message
+ * once. Reports leave out the page's URL, which has the workspace name (the
+ * request log has it as the Referer), and errors from other origins, such as
+ * extensions.
+ */
+export function reportErrors(win) {
+  const sent = new Set();
+  const page = win.location.href.split('#')[0];
+  const scrub = s => String(s || '').split(page).join('page').slice(0, 4000);
+  const send = function(error, message, source, line, col) {
+    if (error instanceof Error)
+      message = String(error);  // "TypeError: x", without "Uncaught "
+    else if (!message)
+      message = String(error);
+    if (source && !source.startsWith(win.location.origin))
+      return;
+    if (!source && 'Script error.' == message)  // cross-origin, no details
+      return;
+    message = scrub(message);
+    if (sent.has(message) || sent.size >= maxErrorReports)
+      return;
+    sent.add(message);
+    navigator.sendBeacon('jserror', JSON.stringify({
+      message, source: scrub(source), line: line || 0, col: col || 0,
+      stack: scrub(error && error.stack), version}));
+  };
+  win.addEventListener('error', function(ev) {
+    send(ev.error, ev.message, ev.filename, ev.lineno, ev.colno);
+  });
+  win.addEventListener('unhandledrejection', function(ev) {
+    send(ev.reason, '', '', 0, 0);
+  });
 }
 
 /**

@@ -128,6 +128,8 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		method("GET", func() { s.rss(req, "", false) })
 	case "/webnote/load.py":
 		method("GET", func() { s.load(req, "", false) })
+	case "/webnote/jserror":
+		method("POST", func() { s.jsError(req) })
 	default:
 		if m := rssRoute.FindStringSubmatch(path); m != nil {
 			method("GET", func() { s.rss(req, m[1], true) })
@@ -468,4 +470,56 @@ func (s *server) saveHandler(req *request) {
 	// other clients, so it must use the same format.
 	writeBody(req.w, "text/xml; charset=utf-8",
 		[]byte(`<return><status value="ok" update="`+req.formatTime(ws.Time)+`"/></return>`))
+}
+
+// jsReport is what the client's error beacon sends (reportErrors() in
+// webnote.js).
+type jsReport struct {
+	Message string `json:"message"`
+	Source  string `json:"source"`
+	Line    int    `json:"line"`
+	Col     int    `json:"col"`
+	Stack   string `json:"stack"`
+	Version string `json:"version"`
+}
+
+// errorEventType makes Cloud Error Reporting pick up a log line that has no
+// server stack trace. It groups the line by its "message".
+const errorEventType = "type.googleapis.com/google.devtools.clouderrorreporting.v1beta1.ReportedErrorEvent"
+
+// clip shortens s to at most n bytes, on a rune boundary.
+func clip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return strings.ToValidUTF8(s[:n], "")
+}
+
+// jsError logs an error from a page's script for Error Reporting. The
+// beacon doesn't read the answer, so bad reports are dropped without an
+// error.
+func (s *server) jsError(req *request) {
+	body, err := io.ReadAll(http.MaxBytesReader(req.w, req.r.Body, 8<<10))
+	var report jsReport
+	if err == nil && json.Unmarshal(body, &report) == nil && report.Message != "" {
+		message := clip(report.Message, 500)
+		// V8's stack starts with the error ("TypeError: x"); Firefox's
+		// and Safari's are only the frames.
+		event := clip(report.Stack, 4000)
+		if event == "" {
+			event = fmt.Sprintf("%s\n    at %s:%d:%d", message, clip(report.Source, 500), report.Line, report.Col)
+		} else if !strings.HasPrefix(event, message) {
+			event = message + "\n" + event
+		}
+		slog.Error(event,
+			"@type", errorEventType,
+			slog.Group("serviceContext",
+				"service", "webnote-client",
+				"version", clip(report.Version, 100)),
+			slog.Group("context",
+				slog.Group("httpRequest",
+					"userAgent", clip(req.r.UserAgent(), 500))),
+			traceAttr(s.project, req.r))
+	}
+	req.w.WriteHeader(http.StatusNoContent)
 }

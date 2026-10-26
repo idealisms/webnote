@@ -30,7 +30,7 @@ async function load() {
                         {value: {userAgent: 'node'}, configurable: true, writable: true});
   const url = file => pathToFileURL(path.join(__dirname, file)).href;
   const objects = await import(url('objects.js'));
-  const webnote = await import(url('webnote.js') + '?' + ++loads);
+  const webnote = await import(url('webnote.js') + '?n=' + ++loads + '&v=test');
   return {...objects, ...webnote, window, document};
 }
 
@@ -268,4 +268,40 @@ test('save ignores clicks while a save is in flight', async () => {
   ws.save();
   assert.equal(requests.length, 1);
   assert.match(requests[0].url, /loaded=100$/);
+});
+
+test('reportErrors sends each error once, at most 5, without the page URL', async () => {
+  const {reportErrors} = await load();
+  const listeners = {};
+  const page = 'https://e.com/webnote/my%20notes';
+  const win = {
+    location: {href: page + '#x', origin: 'https://e.com'},
+    addEventListener: (type, f) => { listeners[type] = f; },
+  };
+  const beacons = [];
+  navigator.sendBeacon = (url, body) => beacons.push({url, report: JSON.parse(body)});
+  reportErrors(win);
+
+  const error = new TypeError('x is undefined');
+  error.stack = 'TypeError: x is undefined\n    at f (' + page + ':3:9)';
+  listeners.error({error, message: 'Uncaught TypeError: x is undefined',
+                   filename: page, lineno: 3, colno: 9});
+  listeners.error({error, message: 'Uncaught TypeError: x is undefined',
+                   filename: page, lineno: 3, colno: 9});
+  assert.equal(beacons.length, 1, 'the same message is sent once');
+  assert.deepEqual(beacons[0], {url: 'jserror', report: {
+    message: 'TypeError: x is undefined', source: 'page', line: 3, col: 9,
+    stack: 'TypeError: x is undefined\n    at f (page:3:9)', version: 'test'}});
+
+  listeners.error({error: null, message: 'Script error.', filename: '', lineno: 0, colno: 0});
+  listeners.error({error: new Error('ext'), message: 'ext',
+                   filename: 'chrome-extension://abc/x.js', lineno: 1, colno: 1});
+  assert.equal(beacons.length, 1, 'errors from other origins are dropped');
+
+  listeners.unhandledrejection({reason: 'rejected'});
+  assert.equal(beacons[1].report.message, 'rejected');
+  assert.equal(beacons[1].report.stack, '');
+  for (let i = 0; i < 10; ++i)
+    listeners.unhandledrejection({reason: new Error('e' + i)});
+  assert.equal(beacons.length, 5, 'at most 5 per page');
 });
