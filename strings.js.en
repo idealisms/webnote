@@ -55,11 +55,14 @@ var strings = {
   LOADVERSIONS_ERROR: 'Couldn\'t retrieve the version history.',
   LOADVERSIONS_RETRY: 'try again',
 
-  COLLISION_WARNING: "This workspace has been changed by someone else while you were working on it.  If you want to see what the workspace looks like now, you can <a href='$1' target='_new'>open it in a new window</a>.",
+  COLLISION_WARNING: "Someone else changed this workspace while you were working on it.",
+  COLLISION_OPEN: 'Open it in a new tab',
   CONFLICT_WARNING: 'Someone else saved this workspace after you loaded it, so your notes were not saved.',
   CONFLICT_OPEN_NEWER: 'Open their version in a new tab',
   CONFLICT_SAVE_ANYWAY: 'Save mine anyway',
   CONFLICT_RELOAD: 'Load their version (discard my changes)',
+  CONFLICT_KEEP_EDITING: 'Keep editing',
+  DIALOG_CLOSE: 'Close',
   
   SAVE_STATUS_ERROR: 'Failed to save notes.  Please make sure you have an internet connection and try again.',
   // $1 is the email address of the admin

@@ -236,3 +236,57 @@ a.fakelink {
 }
 select.loadfrm option {
 }
+
+/* The client's own messages (showDialog() in webnote.js), in the colors of
+   the notes they replace. */
+dialog.message {
+  font-family: Arial, helvetica, sans-serif;
+  font-size: 1em;
+  border: 3px #000 solid;
+  padding: 4px 10px;
+  max-width: 420px;
+}
+dialog.message::backdrop {
+  background: rgba(0, 0, 0, 0.3);
+}
+dialog.message p {
+  margin: 6px 0;
+}
+dialog.message div.buttons {
+  text-align: right;
+  margin: 8px 0 4px;
+}
+dialog.message div.buttons button {
+  margin-left: 6px;
+}
+dialog.history {
+  background: #ffff30;
+  text-align: center;
+}
+dialog.history p {
+  text-align: left;
+}
+dialog.history div.pages {
+  font-size: 0.8em;
+  margin-top: 4px;
+}
+dialog.conflict, dialog.collision {
+  background: #ff6060;
+}
+/* Not modal: a banner under the toolbar, above the notes. */
+dialog.collision {
+  position: fixed;
+  top: 32px;
+  z-index: 100000;
+  margin: 0 auto;
+  padding: 8px 10px;
+}
+dialog.collision button.closeDialog {
+  float: right;
+  margin: -4px -4px 0 8px;
+  border: 0;
+  background: none;
+  font-size: 1.3em;
+  line-height: 1;
+  cursor: pointer;
+}

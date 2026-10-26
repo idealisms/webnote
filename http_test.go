@@ -430,8 +430,9 @@ var fixedSincePython = map[string]fixedResponse{
 }
 
 // stringsSincePython are changes to strings.js since the port, applied to
-// Python's responses: times are shown in the browser's time zone, and the
-// history note's error and the save conflict warning are new.
+// Python's responses: times are shown in the browser's time zone, the
+// history's error and the save conflict warning are new, and the collision
+// warning is plain text.
 var stringsSincePython = strings.NewReplacer(
 	"all times are US Eastern Time (-0500)", "times are in your time zone",
 	"alle Zeiten sind in US Eastern Time (-0500)", "alle Zeiten in Ihrer Zeitzone",
@@ -443,17 +444,26 @@ var stringsSincePython = strings.NewReplacer(
 		`  LOADVERSIONS_ERROR: 'Die Versionen konnten nicht abgerufen werden.',
   LOADVERSIONS_RETRY: 'erneut versuchen',
 `,
-	"open it in a new window</a>.\",\n", "open it in a new window</a>.\",\n"+
-		`  CONFLICT_WARNING: 'Someone else saved this workspace after you loaded it, so your notes were not saved.',
+	// The collision warning is a banner, and its link a separate string.
+	"  COLLISION_WARNING: \"This workspace has been changed by someone else while you were working on it.  If you want to see what the workspace looks like now, you can <a href='$1' target='_new'>open it in a new window</a>.\",\n",
+	`  COLLISION_WARNING: "Someone else changed this workspace while you were working on it.",
+  COLLISION_OPEN: 'Open it in a new tab',
+  CONFLICT_WARNING: 'Someone else saved this workspace after you loaded it, so your notes were not saved.',
   CONFLICT_OPEN_NEWER: 'Open their version in a new tab',
   CONFLICT_SAVE_ANYWAY: 'Save mine anyway',
   CONFLICT_RELOAD: 'Load their version (discard my changes)',
+  CONFLICT_KEEP_EDITING: 'Keep editing',
+  DIALOG_CLOSE: 'Close',
 `,
-	"Fenster \\u00F6ffnen</a>.\",\n", "Fenster \\u00F6ffnen</a>.\",\n"+
-		`  CONFLICT_WARNING: 'Jemand anderes hat diesen Arbeitsplatz gespeichert, nachdem Du ihn geladen hast. Deine Notizen wurden deshalb nicht gespeichert.',
+	"  COLLISION_WARNING: \"Dieser Arbeitsplatz wurde von jemand anderem ver\\u00E4ndert w\\u00E4hrend Du daran gearbeitet hast. Wenn Du sehen willst wie der Arbeitsplatz jetzt aussieht, kannst Du den<a href='$1' target='_new'>Arbeitsplatz in einem neuen Fenster \\u00F6ffnen</a>.\",\n",
+	`  COLLISION_WARNING: "Dieser Arbeitsplatz wurde von jemand anderem ver\u00E4ndert, w\u00E4hrend Du daran gearbeitet hast.",
+  COLLISION_OPEN: 'In einem neuen Tab \u00F6ffnen',
+  CONFLICT_WARNING: 'Jemand anderes hat diesen Arbeitsplatz gespeichert, nachdem Du ihn geladen hast. Deine Notizen wurden deshalb nicht gespeichert.',
   CONFLICT_OPEN_NEWER: 'Die neuere Version in einem neuen Tab \u00F6ffnen',
   CONFLICT_SAVE_ANYWAY: 'Meine trotzdem speichern',
   CONFLICT_RELOAD: 'Die neuere Version laden (meine \u00C4nderungen verwerfen)',
+  CONFLICT_KEEP_EDITING: 'Weiter bearbeiten',
+  DIALOG_CLOSE: 'Schlie\u00DFen',
 `,
 )
 

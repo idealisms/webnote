@@ -385,10 +385,6 @@ Note.prototype.destroy = function(addToHistory)
   // resize the mini box and update the stats
   this.parent.updateMiniBox();
 
-  // checks for changes wait while a warning is shown
-  if ('updated' == this.id || 'conflict' == this.id)
-    this.parent.schedulePoll();
-
   // is the garbage collector smart enough to delete the object now?
 }
 /**
@@ -1492,15 +1488,8 @@ export const workspace =
     if (!offset)
       offset = 0;
 
-    this.createNote( {
-      'id' : 'load',
-      'height' : '130',
-      'width' : '270',
-      'bgcolor' : '#ffff30'
-    } );
-    const txt = strings.LOADVERSIONS_INIT;
-    this.notes['load'].setText(txt);
-    this.reZOrder('load');
+    showDialog('historyDialog', 'history', true,
+               [paragraph(strings.LOADVERSIONS_INIT), dialogButtons([closeButton()])]);
 
     const failed = function() {
       workspace.loadlistFailed(offset);
@@ -1519,42 +1508,32 @@ export const workspace =
   },
 
   loadlistFailed : function(offset) {
-    // the user may have closed the note already
-    if (!this.notes['load'])
+    // the user may have closed the history already
+    if (!dialogOpen('historyDialog'))
       return;
-    this.notes['load'].setText(strings.LOADVERSIONS_ERROR);
-    const retry = document.createElement('a');
-    retry.className = 'fakelink';
+    const retry = document.createElement('button');
+    retry.type = 'button';
     retry.textContent = strings.LOADVERSIONS_RETRY;
     retry.addEventListener('click', function() { workspace.loadlist(offset); });
-    const div = document.createElement('div');
-    div.style.textAlign = 'center';
-    div.appendChild(retry);
-    get('load').appendChild(div);
+    showDialog('historyDialog', 'history', true,
+               [paragraph(strings.LOADVERSIONS_ERROR), dialogButtons([retry, closeButton()])]);
   },
 
   loadlistCallback : function(text, offset) {
+    if (!dialogOpen('historyDialog'))
+      return;
     const loadTimes = text.split('|');
-    this.createNote( {
-      'id': 'load',
-      'height': '130',
-      'width': '270',
-      'bgcolor': '#ffff30'
-    } );
-    const note = this.notes['load'];
     db('resp: ' + text.trim());
     db('resplen: ' + text.trim().length);
     if (text.trim() == '') {
-      note.setText(note.text + '\n' + strings.LOADVERSIONS_NONE);
-      this.reZOrder('load');
+      showDialog('historyDialog', 'history', true,
+                 [paragraph(strings.LOADVERSIONS_NONE), dialogButtons([closeButton()])]);
       return;
     }
-    note.setText(strings.LOADVERSIONS_ABOUT);
 
     const form = document.createElement('form');
     form.method = 'GET';
     form.action = 'load.py';
-    form.addEventListener('mousedown', stopPropagation);
     const name = document.createElement('input');
     name.type = 'hidden';
     name.name = 'name';
@@ -1569,8 +1548,8 @@ export const workspace =
     submit.type = 'submit';
     submit.value = 'load';
 
-    const links = document.createElement('span');
-    links.style.fontSize = '0.8em';
+    const links = document.createElement('div');
+    links.className = 'pages';
     const pageLink = function(text, newOffset) {
       const a = document.createElement('a');
       a.className = 'fakelink';
@@ -1589,12 +1568,9 @@ export const workspace =
     }
     links.append(document.createElement('br'), strings.LOADVERSIONS_DATE_NOTE);
 
-    form.append(name, select, submit, document.createElement('br'), links);
-    const div = document.createElement('div');
-    div.style.textAlign = 'center';
-    div.appendChild(form);
-    get('load').appendChild(div);
-    this.reZOrder('load');
+    form.append(name, select, ' ', submit, links);
+    showDialog('historyDialog', 'history', true,
+               [paragraph(strings.LOADVERSIONS_ABOUT), form, dialogButtons([closeButton()])]);
   },
 
   /**
@@ -1611,7 +1587,7 @@ export const workspace =
    * until it's closed.
    */
   warningShown : function() {
-    return 'updated' in this.notes || 'conflict' in this.notes;
+    return dialogOpen('collisionDialog') || dialogOpen('conflictDialog');
   },
 
   /**
@@ -1651,14 +1627,7 @@ export const workspace =
       // shown while the check was in flight; closing it checks again
     } else if (loadTime > Math.max(this.loadedTime, this.warnedTime)) {
       this.warnedTime = loadTime;
-      this.createNote( {
-        'id' : 'updated',
-        'xPos' : '0',
-        'yPos' : '40',
-        'bgcolor' : '#ff6060',
-        'height' : '100',
-        'text' : strings.COLLISION_WARNING.replace("$1", escape(escape(myescape(this.name))))
-      });
+      this.showCollision();
     } else {
       db('no changes');
       this.schedulePoll();
@@ -1666,59 +1635,63 @@ export const workspace =
   },
 
   /**
+   * Say that someone else saved the workspace, in a banner that doesn't stop
+   * the user.  Checks for changes wait until it's closed.
+   */
+  showCollision : function() {
+    const open = document.createElement('a');
+    open.href = escape(escape(myescape(this.name)));
+    open.target = '_blank';
+    open.textContent = strings.COLLISION_OPEN;
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'closeDialog';
+    close.textContent = '\u00d7';
+    close.title = strings.DIALOG_CLOSE;
+    close.setAttribute('aria-label', strings.DIALOG_CLOSE);
+    close.addEventListener('click', function() { get('collisionDialog').close(); });
+    showDialog('collisionDialog', 'collision', false,
+               [close, strings.COLLISION_WARNING + ' ', open],
+               function() { workspace.schedulePoll(); });
+  },
+
+  /**
    * Someone else saved the workspace (at time, in microseconds since the
    * epoch) after this page loaded it, so the save didn't happen.  Let the
-   * user choose what to do.  Saves keep reporting the conflict until the
-   * user saves anyway.
+   * user choose what to do.  Keep editing (or Esc) closes the dialog, and
+   * the next save conflicts again, until the user saves anyway.
    */
   showConflict : function(time) {
-    // this replaces the collision warning
-    for (const id of ['updated', 'conflict']) {
-      if (this.notes[id])
-        this.notes[id].destroy();
-    }
-    this.createNote( {
-      'id' : 'conflict',
-      'xPos' : '0',
-      'yPos' : '40',
-      'bgcolor' : '#ff6060',
-      'height' : '150',
-      'width' : '300'
-    } );
-    this.notes['conflict'].setText(strings.CONFLICT_WARNING);
+    // this replaces the collision warning, which needn't come back for
+    // this save
+    if (dialogOpen('collisionDialog'))
+      get('collisionDialog').close();
+    this.warnedTime = Math.max(this.warnedTime, time);
 
     const self = this;
-    const choice = function(text, onclick) {
-      const a = document.createElement('a');
-      a.className = 'fakelink';
-      a.textContent = text;
-      a.addEventListener('click', onclick);
-      const li = document.createElement('li');
-      li.appendChild(a);
-      return li;
-    };
     const newer = document.createElement('a');
     newer.href = 'load.py?name=' + escape(myescape(this.name)) + '&time=' + time;
     newer.target = '_blank';
     newer.textContent = strings.CONFLICT_OPEN_NEWER;
-    const newerItem = document.createElement('li');
-    newerItem.appendChild(newer);
-    const list = document.createElement('ul');
-    list.addEventListener('mousedown', stopPropagation);
-    list.append(
-      newerItem,
-      choice(strings.CONFLICT_SAVE_ANYWAY, function() {
-        // Base the save on the version it replaces.  If yet another save
-        // landed since, it conflicts again.
-        self.loadedTime = time;
-        self.notes['conflict'].destroy();
-        self.save();
-      }),
-      choice(strings.CONFLICT_RELOAD, function() {
-        self.changed = false;
-        location.href = escape(escape(myescape(self.name)));
-      }));
-    get('conflict').appendChild(list);
+    const saveAnyway = dialogButton(strings.CONFLICT_SAVE_ANYWAY, function() {
+      // Base the save on the version it replaces.  If yet another save
+      // landed since, it conflicts again.
+      self.loadedTime = time;
+      get('conflictDialog').close();
+      self.save();
+    });
+    const reload = dialogButton(strings.CONFLICT_RELOAD, function() {
+      self.changed = false;
+      location.href = escape(escape(myescape(self.name)));
+    });
+    const keepEditing = dialogButton(strings.CONFLICT_KEEP_EDITING, function() {
+      get('conflictDialog').close();
+    });
+    showDialog('conflictDialog', 'conflict', true,
+               [paragraph(strings.CONFLICT_WARNING), paragraph(newer),
+                dialogButtons([saveAnyway, reload]), dialogButtons([keepEditing])],
+               function() { workspace.schedulePoll(); });
+    saveAnyway.focus();
   },
 
   /**
@@ -1906,6 +1879,74 @@ export function init()
     if ('visible' == document.visibilityState && !workspace.pollTimer)
       workspace.checkUpdated();
   });
+}
+
+/**
+ * Show the dialog with this id, modal or not, with new contents.  The first
+ * time, make it, with onClose (if given) for its close event.  The client's
+ * own messages are dialogs rather than notes, so they aren't saved and their
+ * ids don't clash with the notes older versions saved for them (load,
+ * updated and conflict).
+ * @return the dialog
+ */
+function showDialog(id, className, modal, contents, onClose) {
+  let dialog = get(id);
+  if (!dialog) {
+    dialog = document.createElement('dialog');
+    dialog.id = id;
+    dialog.className = 'message ' + className;
+    // Clicks and keys in a dialog aren't for the notes underneath.
+    dialog.addEventListener('mousedown', stopPropagation);
+    dialog.addEventListener('keydown', stopPropagation);
+    if (onClose)
+      dialog.addEventListener('close', onClose);
+    document.body.appendChild(dialog);
+  }
+  dialog.replaceChildren(...contents);
+  if (!dialog.open) {
+    if (modal) {
+      dialog.showModal();
+    } else {
+      // show() focuses the dialog; leave the focus where the user is typing
+      const active = document.activeElement;
+      dialog.show();
+      if (active)
+        active.focus();
+    }
+  }
+  return dialog;
+}
+
+function dialogOpen(id) {
+  const dialog = get(id);
+  return Boolean(dialog && dialog.open);
+}
+
+function paragraph(content) {
+  const p = document.createElement('p');
+  p.append(content);
+  return p;
+}
+
+function dialogButton(text, onclick) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = text;
+  button.addEventListener('click', onclick);
+  return button;
+}
+
+function closeButton() {
+  return dialogButton(strings.DIALOG_CLOSE, function(ev) {
+    ev.target.closest('dialog').close();
+  });
+}
+
+function dialogButtons(buttons) {
+  const div = document.createElement('div');
+  div.className = 'buttons';
+  div.append(...buttons);
+  return div;
 }
 
 function stopPropagation(e) {

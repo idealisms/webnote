@@ -183,7 +183,10 @@ async function loadPolling() {
   const ws = ctx.workspace;
   ws.name = 'ws';
   ws.loadedTime = 100;
-  ws.createNote = note => { ws.notes[note.id] = note; };
+  // The dialogs: showCollision() builds DOM, so it just opens its dialog.
+  const collision = ctx.document.getElementById('collisionDialog');
+  const conflict = ctx.document.getElementById('conflictDialog');
+  ws.showCollision = () => { collision.open = true; };
   const answer = async (status, text) => {
     requests.shift().resolve({status, text: async () => text});
     await new Promise(setImmediate);
@@ -194,11 +197,11 @@ async function loadPolling() {
     timers.delete(id);
     f();
   };
-  return {ctx, ws, timers, requests, answer, fire};
+  return {ctx, ws, timers, requests, answer, fire, collision, conflict};
 }
 
 test('checkUpdated keeps one check going, through failures', async () => {
-  const {ctx, ws, timers, requests, answer, fire} = await loadPolling();
+  const {ctx, ws, timers, requests, answer, fire, collision} = await loadPolling();
   ws.schedulePoll();
   ws.schedulePoll();
   fire();
@@ -213,7 +216,7 @@ test('checkUpdated keeps one check going, through failures', async () => {
   fire();
   await answer(200, '100');
   assert.equal(timers.size, 1, 'no change: check again later');
-  assert.ok(!('updated' in ws.notes));
+  assert.ok(!collision.open);
 
   // A hidden tab skips the check and leaves no timer, for visibilitychange.
   ctx.document.visibilityState = 'hidden';
@@ -224,27 +227,27 @@ test('checkUpdated keeps one check going, through failures', async () => {
 });
 
 test('checkUpdated stops while the warning is shown', async () => {
-  const {ws, timers, requests, answer, fire} = await loadPolling();
+  const {ws, timers, requests, answer, fire, collision, conflict} = await loadPolling();
   ws.checkUpdated();
   await answer(200, '200');
-  assert.ok('updated' in ws.notes, 'a newer save shows the warning');
+  assert.ok(collision.open, 'a newer save shows the warning');
   assert.equal(timers.size, 0);
   ws.checkUpdated();
   assert.equal(requests.length, 0, 'no checks while it is shown');
 
   // Closing it checks again, and the same save doesn't warn twice.
-  delete ws.notes.updated;
+  collision.open = false;
   ws.schedulePoll();
   fire();
   await answer(200, '200');
-  assert.ok(!('updated' in ws.notes));
+  assert.ok(!collision.open);
   fire();
   await answer(200, '300');
-  assert.ok('updated' in ws.notes, 'a newer one does');
+  assert.ok(collision.open, 'a newer one does');
 
   // A conflict warning stops checks too.
-  delete ws.notes.updated;
-  ws.notes.conflict = {};
+  collision.open = false;
+  conflict.open = true;
   ws.checkUpdated();
   assert.equal(requests.length, 0);
 });

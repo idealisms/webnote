@@ -71,6 +71,10 @@ def edit_and_save(page, note_id, text):
     return page.evaluate('workspace.loadedTime')
 
 
+def dialog_open(page, dialog_id):
+    return page.evaluate('id => !!(get(id) && get(id).open)', dialog_id)
+
+
 def note_texts(page):
     return sorted(page.evaluate('Object.values(workspace.notes).map(n => n.text)'))
 
@@ -142,7 +146,7 @@ def run(browser, base, name, previous):
     # The collision check (getrecent.py) must agree with the save time.
     page.evaluate('workspace.checkUpdated()')
     page.wait_for_timeout(1500)
-    check(not page.evaluate("'updated' in workspace.notes"), 'no collision warning')
+    check(not dialog_open(page, 'collisionDialog'), 'no collision warning')
 
     # History: the reload icon lists revisions; load the older one.
     page.click('#reloadImg')
@@ -158,7 +162,7 @@ def run(browser, base, name, previous):
     check(labels[1] == expected, 'history shows times in the browser time zone (%r)' % labels[1])
     page.select_option('select.loadfrm', str(first_time))
     with page.expect_navigation():
-        page.click('#load input[type=submit]')
+        page.click('#historyDialog input[type=submit]')
     check('/webnote/load.py?' in page.url, 'the history form opens load.py')
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
     check(page.evaluate('workspace.name') == name, 'load.py opens the same workspace')
@@ -182,24 +186,24 @@ def run(browser, base, name, previous):
     page.mouse.click(700, 550)
     mine_text = page.evaluate('workspace.notes[%r].text' % note_id)
     page.click('#saveImg')
-    page.wait_for_selector('#conflict ul')
+    page.wait_for_selector('#conflictDialog[open]')
     check(page.evaluate('workspace.loadedTime') == second_time
           and page.evaluate('workspace.changed'), 'a save after another tab saved conflicts')
-    newer = page.get_attribute('#conflict a[target=_blank]', 'href')
+    newer = page.get_attribute('#conflictDialog a[target=_blank]', 'href')
     other.goto(urllib.parse.urljoin(page.url, newer))
     other.wait_for_function("typeof workspace != 'undefined' && workspace.name")
     check(other.evaluate('workspace.notes[%r].text' % note_id) == third_text,
           'the conflict links to the other tab\'s revision')
     other.close()
-    page.locator('#conflict').get_by_text(
-        page.evaluate('strings.CONFLICT_SAVE_ANYWAY'), exact=True).click()
+    page.locator('#conflictDialog').get_by_role(
+        'button', name=page.evaluate('strings.CONFLICT_SAVE_ANYWAY'), exact=True).click()
     wait_for_save(page)
     check(page.evaluate('workspace.loadedTime') > third_time
-          and not page.evaluate("'conflict' in workspace.notes"), 'save anyway saves')
+          and not dialog_open(page, 'conflictDialog'), 'save anyway saves')
     page.reload()
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
     check(page.evaluate('workspace.notes[%r].text' % note_id) == mine_text
-          and not page.evaluate("'conflict' in workspace.notes"),
+          and page.evaluate('workspace.numNotes') == len(start_texts) + 1,
           'and stores this tab\'s notes, without the warning')
 
     page.dblclick('#' + note_id)
@@ -486,38 +490,48 @@ def run_ui(browser, base, name):
         offsets.append(int(query['offset'][0]))
         route.fulfill(body='|'.join(times[offsets[-1]:offsets[-1] + 11]))
     page.route('**/getdates.py*', on_getdates)
+    num_notes = page.evaluate('workspace.numNotes')
+    save_xml = page.evaluate('workspace.toString()')
     page.click('#reloadImg')
-    page.wait_for_selector('#load select.loadfrm')
-    check(page.eval_on_selector_all('#load option', 'os => os.map(o => o.value)') == times[:10],
-          'the history note lists the first 10 times')
-    check(page.evaluate("get('load').querySelector('input[name=name]').value"
+    page.wait_for_selector('#historyDialog select.loadfrm')
+    check(page.eval_on_selector_all('#historyDialog option', 'os => os.map(o => o.value)')
+          == times[:10], 'the history dialog lists the first 10 times')
+    check(page.evaluate("get('historyDialog').matches(':modal')"), 'and is modal')
+    check(page.evaluate("get('historyDialog').querySelector('input[name=name]').value"
                         " == myescape(workspace.name)"), 'with the escaped name')
-    check(page.locator('#load a.fakelink').all_text_contents()
+    check(page.locator('#historyDialog a.fakelink').all_text_contents()
           == [page.evaluate('strings.LOADVERSIONS_OLDER')], 'and only an older link')
-    page.click('#load a.fakelink')
-    page.wait_for_function("get('load').querySelectorAll('option').length == 2")
-    check(offsets == [0, 10] and page.locator('#load a.fakelink').all_text_contents()
+    check(page.evaluate('workspace.numNotes') == num_notes
+          and page.evaluate('workspace.toString()') == save_xml,
+          'the history isn\'t a note, so saving doesn\'t store it')
+    page.click('#historyDialog a.fakelink')
+    page.wait_for_function("get('historyDialog').querySelectorAll('option').length == 2")
+    check(offsets == [0, 10] and page.locator('#historyDialog a.fakelink').all_text_contents()
           == [page.evaluate('strings.LOADVERSIONS_NEWER')], 'older shows the rest, with a newer link')
     check(page.evaluate("document.querySelectorAll('[onclick], [onmousedown], [ondblclick],"
                         " [onkeydown], [onchange], [onload]').length") == 0,
           'no inline event handlers')
-    page.evaluate("workspace.notes['load'].destroy()")
+    page.keyboard.press('Escape')
+    page.wait_for_function("!get('historyDialog').open")
+    check(page.evaluate('workspace.numNotes') == num_notes, 'Esc closes the history')
 
     # A failed getdates.py says so, and retrying lists the times.
     page.unroute('**/getdates.py*')
     page.route('**/getdates.py*', lambda route: route.fulfill(status=500, body='error'))
     page.click('#reloadImg')
-    retry = page.locator('#load a.fakelink')
+    retry = page.locator('#historyDialog').get_by_role(
+        'button', name=page.evaluate('strings.LOADVERSIONS_RETRY'), exact=True)
     retry.wait_for()
-    check(retry.all_text_contents() == [page.evaluate('strings.LOADVERSIONS_RETRY')]
-          and page.evaluate("workspace.notes['load'].text == strings.LOADVERSIONS_ERROR"),
-          'a failed history request shows an error and a retry link')
+    check(page.evaluate("get('historyDialog').textContent.includes(strings.LOADVERSIONS_ERROR)"),
+          'a failed history request shows an error and a retry button')
     page.unroute('**/getdates.py*')
     page.route('**/getdates.py*', on_getdates)
     retry.click()
-    page.wait_for_selector('#load select.loadfrm')
+    page.wait_for_selector('#historyDialog select.loadfrm')
     check(True, 'retrying lists the times')
-    page.evaluate("workspace.notes['load'].destroy()")
+    page.locator('#historyDialog').get_by_role(
+        'button', name=page.evaluate('strings.DIALOG_CLOSE'), exact=True).click()
+    check(not dialog_open(page, 'historyDialog'), 'the close button closes the history')
 
     # A failed save says so, and the workspace stays unsaved.
     alert = page.evaluate('strings.SAVE_STATUS_ERROR')
@@ -545,9 +559,18 @@ def run_ui(browser, base, name):
     # Collision warning: getrecent.py reports a newer save.
     newer = page.evaluate('workspace.loadedTime') + 1
     page.route('**/getrecent.py*', lambda route: route.fulfill(body=str(newer)))
+    num_notes = page.evaluate('workspace.numNotes')
+    page.focus('#textfilter')
     page.evaluate('workspace.checkUpdated()')
-    page.wait_for_function("'updated' in workspace.notes")
-    check(True, 'a newer save on the server shows the collision warning')
+    page.wait_for_selector('#collisionDialog[open]')
+    check(page.evaluate('document.activeElement.id') == 'textfilter',
+          'the banner leaves the focus where it was')
+    check(not page.evaluate("get('collisionDialog').matches(':modal')")
+          and page.evaluate('workspace.numNotes') == num_notes,
+          'a newer save on the server shows the collision banner, not modal and not a note')
+    check(page.get_attribute('#collisionDialog a[target=_blank]', 'href')
+          == page.evaluate('escape(escape(myescape(workspace.name)))'),
+          'the banner links to the workspace')
 
     # A save conflict replaces it, until the user saves anyway.
     loaded = page.evaluate('workspace.loadedTime')
@@ -555,18 +578,34 @@ def run_ui(browser, base, name):
     save_response.update(status=409, content_type='text/xml',
                          body='<return><status value="conflict" update="%d"/></return>' % newer)
     page.click('#saveImg')
-    page.wait_for_selector('#conflict ul')
+    page.wait_for_selector('#conflictDialog[open]')
     check(saves[-1].endswith('save.py?epoch=1&loaded=%d' % loaded)
-          and not page.evaluate("'updated' in workspace.notes"),
-          'a save sends loadedTime, and a conflict replaces the collision warning')
-    check(page.get_attribute('#conflict a[target=_blank]', 'href')
+          and not dialog_open(page, 'collisionDialog')
+          and page.evaluate('strings.COLLISION_WARNING') not in save_bodies[-1],
+          'a save sends loadedTime, the banner isn\'t saved, and a conflict replaces it')
+    check(page.evaluate("get('conflictDialog').matches(':modal')"), 'the conflict is modal')
+    check(page.get_attribute('#conflictDialog a[target=_blank]', 'href')
           == 'load.py?name=%s&time=%d' % (page.evaluate('escape(myescape(workspace.name))'), newer),
           'the conflict links to the newer revision')
-    page.click('#saveImg')
-    page.wait_for_function("get('saveImg').dataset.state != 'saving'")
-    check(len(saves) == 5 and page.locator('#conflict ul').count() == 1
+    page.keyboard.press('Alt+S')
+    page.wait_for_timeout(300)
+    check(len(saves) == 4, 'Alt+S does nothing while the conflict is shown')
+    conflict_button = lambda text: page.locator('#conflictDialog').get_by_role(
+        'button', name=page.evaluate('strings.' + text), exact=True)
+    conflict_button('CONFLICT_KEEP_EDITING').click()
+    check(not dialog_open(page, 'conflictDialog')
           and page.evaluate("get('saveImg').className") == 'controls',
-          'saving again still conflicts')
+          'keep editing closes it, and the workspace stays unsaved')
+    page.click('#saveImg')
+    page.wait_for_selector('#conflictDialog[open]')
+    check(len(saves) == 5 and page.locator('#conflictDialog').count() == 1
+          and not dialog_open(page, 'collisionDialog'),
+          'saving again still conflicts, without the banner for the same save')
+    page.keyboard.press('Escape')
+    page.wait_for_function("!get('conflictDialog').open")
+    check(True, 'Esc closes it too')
+    page.click('#saveImg')
+    page.wait_for_selector('#conflictDialog[open]')
     save_response.update(status=200, body='<return><status value="ok" update="%d"/></return>'
                          % (newer + 1))
     page.evaluate("""() => {
@@ -574,26 +613,24 @@ def run_ui(browser, base, name):
         new MutationObserver(() => saveStates.push(get('saveImg').dataset.state))
             .observe(get('saveImg'), {attributes: true, attributeFilter: ['data-state']});
     }""")
-    page.locator('#conflict').get_by_text(
-        page.evaluate('strings.CONFLICT_SAVE_ANYWAY'), exact=True).click()
+    conflict_button('CONFLICT_SAVE_ANYWAY').click()
     wait_for_save(page)
     page.wait_for_function("get('saveImg').dataset.state == ''")
     check(page.evaluate('saveStates') == ['saving', 'saved', ''],
           'the save icon animates, shows a check, then goes back')
     check(saves[-1].endswith('&loaded=%d' % newer) and "noteid='conflict'" not in save_bodies[-1]
           and page.evaluate('workspace.loadedTime') == newer + 1
-          and not page.evaluate("'conflict' in workspace.notes"),
+          and not dialog_open(page, 'conflictDialog'),
           'save anyway saves from the newer revision, without the warning note')
     # Loading their version leaves without asking.
     save_response.update(status=409, body='<return><status value="conflict" update="%d"/></return>'
                          % (newer + 2))
     page.click('#newImg')
     page.click('#saveImg')
-    page.wait_for_selector('#conflict ul')
+    page.wait_for_selector('#conflictDialog[open]')
     del dialogs[:]
     with page.expect_navigation():
-        page.locator('#conflict').get_by_text(
-            page.evaluate('strings.CONFLICT_RELOAD'), exact=True).click()
+        conflict_button('CONFLICT_RELOAD').click()
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
     check(not dialogs and page.evaluate('workspace.name') == name,
           'loading their version opens the workspace without asking')
@@ -617,7 +654,7 @@ def run_ui(browser, base, name):
           'an uncaught error is reported, without the page URL (%r)' % report)
     problems[:] = [p for p in problems if 'browsertest error' not in p]
 
-    check(len(saves) == 7, 'only the failed and conflicting saves were tried')
+    check(len(saves) == 8, 'only the failed and conflicting saves were tried')
     check(not dialogs and not problems, 'no other alerts or JavaScript errors%s' % (
         '' if not (dialogs or problems) else ': %s' % (dialogs + problems)))
     page.goto(base + '/webnote/')
