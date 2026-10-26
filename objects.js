@@ -2,13 +2,15 @@
  * @fileoverview A few generic objects and functions used by webnote.
  */
 
+'use strict';
+
 ///
 /// global methods
 ///
-var hex2dec = function(h) { return parseInt(h, 16); };
-var dec2hex = function(d)
+const hex2dec = function(h) { return parseInt(h, 16); };
+const dec2hex = function(d)
 {
-  var ret = d.toString(16);
+  let ret = d.toString(16);
   while (ret.length < 2)
     ret = '0' + ret;
   return ret;
@@ -20,7 +22,7 @@ var dec2hex = function(d)
  */
 function findPos(obj)
 {
-  var cur = new Point();
+  const cur = new Point();
   if (obj.offsetParent)
   {
     while (obj.offsetParent)
@@ -42,12 +44,12 @@ function findPos(obj)
  * Get the position of a mouse event relative to the event target.
  */
 function findRelativeMousePos(ev) {
-  var target = ev.target;
-  var targetPos = findPos(target);
-  var pagePos = new Point(ev.pageX, ev.pageY);
+  const target = ev.target;
+  const targetPos = findPos(target);
+  const pagePos = new Point(ev.pageX, ev.pageY);
   // Take content scroll into account since we use that instead of
   // scrolling the body.
-  var content = get('content');
+  const content = get('content');
   pagePos.x += content.scrollLeft;
   pagePos.y += content.scrollTop;
 
@@ -125,11 +127,11 @@ Point.prototype.toString = function() { return '(' + this.x + ', ' + this.y + ')
  */
 function ColorHSV(rgb)
 {
-  var r = rgb.r / 255.0; var g = rgb.g / 255.0; var b = rgb.b / 255.0;
+  const r = rgb.r / 255.0; const g = rgb.g / 255.0; const b = rgb.b / 255.0;
   
-  var min = Math.min(r, g, b); var max = Math.max(r, g, b);
+  const min = Math.min(r, g, b); const max = Math.max(r, g, b);
   this.v = max;
-  var delta = max - min;
+  const delta = max - min;
   if (0 == max) // r == g == b == 0
   {
     this.s = 0;
@@ -165,18 +167,18 @@ ColorHSV.prototype.toString = function()
  */
 ColorHSV.prototype.toColor = function()
 {
-  var ret = new Color('000000');
+  const ret = new Color('000000');
   if (0 == this.s)
   {
     ret.r = ret.g = ret.b = parseInt(this.v*255.0);
     return ret;
   }
-  var h = this.h / 60.0;
-  var i = Math.floor(h);
-  var f = h - i;
-  var p = this.v * (1.0 - this.s);
-  var q = this.v * (1.0 - this.s * f);
-  var t = this.v * (1.0 - this.s * (1 - f));
+  const h = this.h / 60.0;
+  const i = Math.floor(h);
+  const f = h - i;
+  const p = this.v * (1.0 - this.s);
+  const q = this.v * (1.0 - this.s * f);
+  const t = this.v * (1.0 - this.s * (1 - f));
   switch (i)
   {
     case 0: ret.r = this.v; ret.g = t; ret.b = p; break;
@@ -232,7 +234,7 @@ function Color(value)
      * @type int
      */
     this.r = parseInt(value.substring(4));
-    var pos = value.indexOf(',');
+    let pos = value.indexOf(',');
     /**
      * @type int
      */
@@ -270,9 +272,9 @@ Color.prototype.toString = function()
  */
 Color.prototype.hsvadj = function(h, s, v)
 {
-  var hsv = new ColorHSV(this);
+  const hsv = new ColorHSV(this);
   hsv.adj(h, s, v);
-  var c = hsv.toColor();
+  const c = hsv.toColor();
   this.r = c.r; this.g = c.g; this.b = c.b;
   return this;
 };
@@ -318,12 +320,12 @@ function isEsc(s)
  */
 function myescape(s)
 {
-  var ret = "";
-  for (var i = 0; i < s.length; i++)
+  let ret = "";
+  for (let i = 0; i < s.length; i++)
   {
     if (isEsc(s.charCodeAt(i)))
     {
-      var hex = dec2hex(s.charCodeAt(i)).toUpperCase();
+      let hex = dec2hex(s.charCodeAt(i)).toUpperCase();
       if (hex.length > 2)
         hex = 'u' + hex;
       ret += '%' + hex;

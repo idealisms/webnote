@@ -26,6 +26,8 @@ function load() {
   for (const f of ['strings.js.en', 'objects.js', 'webnote.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, f), 'utf8'), ctx, {filename: f});
   }
+  // Top-level let and const aren't properties of the context.
+  Object.assign(ctx, vm.runInContext('({workspace, History, NotePos, bgColors})', ctx));
   return ctx;
 }
 

@@ -8,18 +8,20 @@
  * the notes or undo-ing/redo-ing an action.
  */
 
+'use strict';
+
 // global variables
 // user options
-var debugOn = 0;
-var notePadding = 5;
-var noteBorder = 3;
-var noteBorderColor = '#000';
-var miniWidth = 51;
+let debugOn = 0;
+const notePadding = 5;
+const noteBorder = 3;
+const noteBorderColor = '#000';
+const miniWidth = 51;
 
-var adminEmail, baseURI, numDates;
+let adminEmail, baseURI, numDates;
 
 // TODO: make it easier for users to make custom color maps
-var colorMap = {
+const colorMap = {
   '#ffff30': strings.COLOR_YELLOW,
   '#8facff': strings.COLOR_BLUE,
   '#7fff70': strings.COLOR_GREEN,
@@ -29,8 +31,8 @@ var colorMap = {
   '#ffffff': strings.COLOR_WHITE,
   '#b0b0b0': strings.COLOR_GREY
 };
-var bgColors = [];
-for (var c in colorMap)
+const bgColors = [];
+for (const c in colorMap)
 {
   bgColors.push(c);
 }
@@ -38,9 +40,9 @@ for (var c in colorMap)
 // other global variables, you shouldn't change these
 // BROWSER_SAFARI is any WebKit or Blink browser (Safari, Chrome, Edge);
 // BROWSER_MOZILLA is everything else (Firefox).
-var BROWSER_SAFARI = 2;
-var BROWSER_MOZILLA = 3;
-var browser = navigator.userAgent.toLowerCase().indexOf('webkit') != -1
+const BROWSER_SAFARI = 2;
+const BROWSER_MOZILLA = 3;
+const browser = navigator.userAgent.toLowerCase().indexOf('webkit') != -1
     ? BROWSER_SAFARI : BROWSER_MOZILLA;
 
 /**
@@ -88,12 +90,12 @@ function Note(note, p, text) {
   this.size = new Point(parseInt(note.style.width), parseInt(note.style.height));
 
   // create the mini note dom object
-  var dotElt = document.createElement('div');
+  const dotElt = document.createElement('div');
   dotElt.id = 'm' + this.id;
   dotElt.addEventListener('mousedown', this.miniMouseDown.bind(this));
   get('mini').appendChild(dotElt);
 
-  var dot = get('m' + this.id);
+  const dot = get('m' + this.id);
   dot.className = 'mininote';
   dot.style.backgroundColor = note.style.backgroundColor;
 
@@ -107,7 +109,7 @@ function Note(note, p, text) {
  * User clicked on a note.
  */
 Note.prototype.mouseDown = function(ev) {
-  var target = ev.target;
+  const target = ev.target;
   if (!this.selectable) {
     ev.preventDefault();
     return;
@@ -120,7 +122,7 @@ Note.prototype.mouseDown = function(ev) {
     return;
   }
 
-  var lbutton = 0 == ev.button;
+  const lbutton = 0 == ev.button;
 
   // only the left button should have an event
   // likewise we can disable actions by using meta or ctrl+alt
@@ -128,8 +130,8 @@ Note.prototype.mouseDown = function(ev) {
     return;
 
   // Determine if we're clicking on the note or a scrollbar
-  var pos = findRelativeMousePos(ev);
-  var size = this.getCorrectedSize();
+  const pos = findRelativeMousePos(ev);
+  const size = this.getCorrectedSize();
 
   if (!target.clientWidth || // no clientWidth if you click on a scrollbar in FF1.0
       (pos.x > target.clientWidth + noteBorder
@@ -153,8 +155,8 @@ Note.prototype.miniMouseDown = function(ev)
 {
   // bring all notes of the same color to the front
   if (ev.ctrlKey) {
-    for (var n in this.parent.notes) {
-      var note = this.parent.notes[n];
+    for (const n in this.parent.notes) {
+      const note = this.parent.notes[n];
       if (note != this && note.bgColor.toString() == this.bgColor.toString())
         note.select();
     }
@@ -164,9 +166,9 @@ Note.prototype.miniMouseDown = function(ev)
   this.select();
 
   // bring it back if it's off screen
-  var size = this.getCorrectedSize();
-  var pos = this.getPosition();
-  var elt = get(this.id);
+  const size = this.getCorrectedSize();
+  const pos = this.getPosition();
+  const elt = get(this.id);
   if (size.x + pos.x < 5)
     elt.style.left = "1px";
   if (size.y + pos.y < 5)
@@ -186,7 +188,7 @@ Note.prototype.keyDown = function(ev)
     return;
 
   // set the color based on number
-  var idx = parseInt(String.fromCharCode(ev.keyCode)) - 1;
+  const idx = parseInt(String.fromCharCode(ev.keyCode)) - 1;
   if (idx >= 0 && idx < bgColors.length)
     this.setColor(bgColors[idx]);
 }
@@ -195,7 +197,7 @@ Note.prototype.keyDown = function(ev)
  */
 Note.prototype.mouseMove = function(ev)
 {
-  var elt = get(this.id);
+  const elt = get(this.id);
   if (!this.selectable)
   {
     elt.style.cursor = 'auto';
@@ -204,13 +206,13 @@ Note.prototype.mouseMove = function(ev)
   if (this.parent.mouse.selObj)
     return;
 
-  var top = false;
-  var left = false;
-  var right = false;
-  var bottom = false;
-  var resize_cursor = '';
-  var size = this.getCorrectedSize();
-  var relPos = findRelativeMousePos(ev);
+  let top = false;
+  let left = false;
+  let right = false;
+  let bottom = false;
+  let resize_cursor = '';
+  const size = this.getCorrectedSize();
+  const relPos = findRelativeMousePos(ev);
 
   if (relPos.y <= noteBorder) {
     top = true;
@@ -243,7 +245,7 @@ Note.prototype.mouseMove = function(ev)
  * Mouse moves over a note (darken the background color).
  */
 Note.prototype.mouseOver = function() {
-  var elt = get(this.id);
+  const elt = get(this.id);
   elt.style.background = (new Color(this.bgColor.toString())).hsvadj(0, 0, -0.1);
   this.parent.mouse.noteOver = this;
 }
@@ -251,7 +253,7 @@ Note.prototype.mouseOver = function() {
  * Mouse leaves a note (restore original background color).
  */
 Note.prototype.mouseOut = function() {
-  var elt = get(this.id);
+  const elt = get(this.id);
   elt.style.backgroundColor = this.bgColor.toString();
   delete this.parent.mouse.noteOver;
 }
@@ -267,16 +269,16 @@ Note.prototype.mouseDblClick = function() {
     return;
   }
   this.parent.editOff();
-  var pSize = this.getCorrectedSize();
+  const pSize = this.getCorrectedSize();
   pSize.x -= 2 * (noteBorder + notePadding + 1);
   pSize.y -= 2 * (noteBorder + notePadding + 1) + 20;
-  var bar = document.createElement('div');
+  const bar = document.createElement('div');
   bar.style.textAlign = 'right';
   bar.style.margin = '0 2px 1px 0';
 
   // color swatches here
   bgColors.forEach(function(color, i) {
-    var swatch = document.createElement('div');
+    const swatch = document.createElement('div');
     swatch.style.cssText = 'width: 12px;height:12px;font-size:1px;float:left;'
         + 'border: 1px #000 solid; margin:0 1px 1px 0;cursor:auto;';
     swatch.style.background = color;
@@ -288,7 +290,7 @@ Note.prototype.mouseDblClick = function() {
     bar.appendChild(swatch);
   }, this);
 
-  var close = document.createElement('img');
+  const close = document.createElement('img');
   close.src = 'images/close.gif';
   close.alt = strings.CLOSE_ICON_ALT;
   close.title = strings.CLOSE_ICON_TOOLTIP;
@@ -296,7 +298,7 @@ Note.prototype.mouseDblClick = function() {
   close.addEventListener('click', this.destroy.bind(this, true));
   bar.appendChild(close);
 
-  var textbox = document.createElement('textarea');
+  const textbox = document.createElement('textarea');
   textbox.id = this.id + 'text';
   textbox.style.width = pSize.x + 'px';
   textbox.style.height = pSize.y + 'px';
@@ -304,7 +306,7 @@ Note.prototype.mouseDblClick = function() {
   textbox.addEventListener('dblclick', stopPropagation);
   textbox.value = decodeCharRefs(this.text);
 
-  var elt = get(this.id);
+  const elt = get(this.id);
   elt.replaceChildren(bar, textbox);
   elt.title = '';
   elt.style.overflow = 'hidden';
@@ -322,14 +324,14 @@ Note.prototype.destroy = function(addToHistory)
   if (this.parent.edit == this)
     this.parent.editOff();
 
-  var elt = get(this.id);
+  let elt = get(this.id);
 
   // save undo information
   if (addToHistory)
   {
-    var pos = this.getPosition();
-    var ws = this.parent;
-    var f = {
+    const pos = this.getPosition();
+    const ws = this.parent;
+    const f = {
       title : strings.HISTORY_DELETE_NOTE,
       noteData : {
           'id' : this.id,
@@ -378,8 +380,8 @@ Note.prototype.destroy = function(addToHistory)
  */
 Note.prototype.getPosition = function()
 {
-  var ret = new Point(0, 0);
-  var elt = get(this.id);
+  let ret = new Point(0, 0);
+  const elt = get(this.id);
   ret = new Point(parseInt(elt.style.left), parseInt(elt.style.top));
   return ret;
 }
@@ -397,8 +399,8 @@ Note.prototype.getSize = function()
  * @type Point
  */
 Note.prototype.getCorrectedSize = function() {
-  var ret = this.getSize();
-  var offset = 2*(noteBorder+notePadding);
+  const ret = this.getSize();
+  const offset = 2*(noteBorder+notePadding);
   ret.x += offset;
   ret.y += offset;
   return ret;
@@ -412,11 +414,11 @@ Note.prototype.getCorrectedSize = function() {
  */
 Note.prototype.setColor = function(hex, ignoreHistory)
 {
-  var newColor = new Color(hex);
+  const newColor = new Color(hex);
 
   if (!ignoreHistory)
   {
-    var f = {
+    const f = {
       title : strings.HISTORY_DELETE_NOTE,
       note : this,
       ucolor : this.bgColor,
@@ -435,7 +437,7 @@ Note.prototype.setColor = function(hex, ignoreHistory)
 
   this.bgColor = newColor;
 
-  var elt = get(this.id);
+  const elt = get(this.id);
   if (this.parent.mouse.noteOver && this.parent.mouse.noteOver == this)
     elt.style.background = (new Color(this.bgColor.toString())).hsvadj(0, 0, -0.1);
   else
@@ -451,20 +453,20 @@ Note.prototype.setColor = function(hex, ignoreHistory)
  */
 Note.prototype.getHTML = function() // wikification
 {
-  var sCopy = this.text.replace(/\n/g,"<br />\n");
+  let sCopy = this.text.replace(/\n/g,"<br />\n");
   sCopy = sCopy.replace(/\\<br \/>\n/g,"\n");
 
   // Turn URLs into links: at the start of the text or after whitespace,
   // which stays (a newline here is the end of a line).
   sCopy = sCopy.replace(/(^|\s)((https?|ftp)(:\/\/[-a-zA-Z0-9%.~:_\/]+[a-zA-Z\/])([?&]([-a-zA-Z0-9%.~:_]+)=([-a-zA-Z0-9%.~:_])+)*(#([-a-zA-Z0-9%.~:_]+)?)?)/g,
                         '$1<a href="$2">$2</a>');
-  var lines = sCopy.split('\n');
-  for (var i = 0; i < lines.length; i++) {
+  const lines = sCopy.split('\n');
+  for (let i = 0; i < lines.length; i++) {
     if (lines[i].length > 0) {
       // handle headings
       switch(lines[i].charAt(0)) {
         case '!': // headings
-          var c = 0;
+          let c = 0;
           while ('!' == lines[i].charAt(c))
             c++;
           lines[i] = lines[i].substring(c);
@@ -485,7 +487,7 @@ Note.prototype.getHTML = function() // wikification
  */
 Note.prototype.toXML = function()
 {
-  var ret = "<note noteid='" + this.id + "'";
+  let ret = "<note noteid='" + this.id + "'";
   ret += " bgcolor='" + this.bgColor + "'";
   ret += " xposition='" + this.getPosition().x + "'";
   ret += " yposition='" + this.getPosition().y + "'";
@@ -510,12 +512,12 @@ Note.prototype.setText = function(str)
     this.parent.changed = true;
     this.text = str;
   }
-  var elt = get(this.id);
+  const elt = get(this.id);
   elt.innerHTML = this.getHTML();
 
   // make images undraggable
-  var imgs = elt.getElementsByTagName('img');
-  for (var i = 0; i < imgs.length; i++) {
+  const imgs = elt.getElementsByTagName('img');
+  for (let i = 0; i < imgs.length; i++) {
     imgs[i].addEventListener('mousedown', preventDefault);
   }
 
@@ -528,7 +530,7 @@ Note.prototype.setText = function(str)
  */
 Note.prototype.updateSize = function()
 {
-  var elt = get(this.id);
+  const elt = get(this.id);
   this.size.x = parseInt(elt.style.width);
   this.size.y = parseInt(elt.style.height);
 }
@@ -538,7 +540,7 @@ Note.prototype.updateSize = function()
 Note.prototype.disable = function()
 {
   this.selectable = this.editable = false;
-  var elt = get(this.id);
+  const elt = get(this.id);
   elt.title = '';
 }
 /**
@@ -547,7 +549,7 @@ Note.prototype.disable = function()
 Note.prototype.enable = function()
 {
   this.selectable = this.editable = true;
-  var elt = get(this.id);
+  const elt = get(this.id);
   elt.title = strings.NOTE_TOOLTIP;
 }
 /**
@@ -557,12 +559,12 @@ Note.prototype.enable = function()
 Note.prototype.select = function()
 {
   this.parent.reZOrder(this.id);
-  var self = this;
-  var elt = get(this.id);
+  const self = this;
+  const elt = get(this.id);
   elt.style.backgroundColor = (new Color(this.bgColor.toString()))
                                    .hsvadj(0, 0, -0.1);
   // make a new layer with the name
-  var d = document.createElement('div');
+  const d = document.createElement('div');
   d.textContent = this.id;
   d.style.position = 'absolute';
   d.style.top = (parseInt(elt.style.top) + 5) + 'px';
@@ -583,7 +585,7 @@ Note.prototype.select = function()
  */
 Note.prototype.sendToBack = function()
 {
-  var elt = get(this.id);
+  const elt = get(this.id);
   elt.style.zIndex = 0;
   this.parent.reZOrder();
 }
@@ -592,8 +594,8 @@ Note.prototype.sendToBack = function()
  * @param {Point} delta a point object
  */
 Note.prototype.move = function(delta) {
-  var newpos = this.getPosition().add(delta);
-  var elt = get(this.id);
+  const newpos = this.getPosition().add(delta);
+  const elt = get(this.id);
   elt.style.left = newpos.x + 'px';
   elt.style.top = newpos.y + 'px';
 }
@@ -608,8 +610,8 @@ Note.prototype.move = function(delta) {
  */
 function cmpNotesZ(a, b)
 {
-  var av = parseInt(get(a.id).style.zIndex);
-  var bv = parseInt(get(b.id).style.zIndex);
+  const av = parseInt(get(a.id).style.zIndex);
+  const bv = parseInt(get(b.id).style.zIndex);
   if (av < bv)
     return -1;
   if (av > bv)
@@ -625,7 +627,7 @@ function cmpNotesZ(a, b)
  * @class A class that tracks the mouse position and handles mouse events.
  * @constructor
  */
-var Mouse =
+const Mouse =
 {
   /**
    * When resizing a note, this determines which edges need to be moved and
@@ -720,7 +722,7 @@ function SelectedObjectDrag(note, isGroup)
   // if ctrl is down, move all the notes of the same color
   if (isGroup)
   {
-    for (var n in workspace.notes)
+    for (const n in workspace.notes)
     {
       if (workspace.notes[n].bgColor.toString() == note.bgColor.toString())
       {
@@ -733,10 +735,9 @@ function SelectedObjectDrag(note, isGroup)
     this.notes.push( { 'id' : note.id, 'pos' : note.getPosition() } );
 
   // set the border color of the notes that are being moved
-  var elt;
-  for (n in this.notes)
+  for (const n in this.notes)
   {
-    elt = get(this.notes[n].id);
+    const elt = get(this.notes[n].id);
     elt.style.border =  noteBorder + 'px #980000 solid';
   }
 }
@@ -746,17 +747,16 @@ function SelectedObjectDrag(note, isGroup)
  */
 SelectedObjectDrag.prototype.update = function(md)
 {
-  var offset = md.curPos.sub(md.downPos);
-  var elt;
-  for (n in this.notes) {
-    elt = get(this.notes[n].id);
-    var newPos = this.notes[n].pos.add(offset);
+  const offset = md.curPos.sub(md.downPos);
+  for (const n in this.notes) {
+    const elt = get(this.notes[n].id);
+    const newPos = this.notes[n].pos.add(offset);
     elt.style.left = newPos.x + 'px';
     elt.style.top = newPos.y + 'px';
     if (BROWSER_MOZILLA == browser) {
       // this is a hack to force ffx to resize the content div
-      var c = get('content');
-      var d = document.createElement('span');
+      const c = get('content');
+      const d = document.createElement('span');
       c.appendChild(d);
       c.removeChild(d);
     }
@@ -770,33 +770,31 @@ SelectedObjectDrag.prototype.deselect = function()
 {
   // check to see if we moved the object(s). if we did, add
   // information to the undo stack.
-  var md = workspace.mouse;
-  var offset = md.curPos.sub(md.downPos);
+  const md = workspace.mouse;
+  const offset = md.curPos.sub(md.downPos);
   if (!offset.equals(new Point(0, 0)))
   {
-    var f = {
+    const f = {
       title : ((this.notes.length == 1) ? strings.HISTORY_MOVE_NOTE
                                         : strings.HISTORY_MOVE_NOTES),
       notes : this.notes,
       off : offset,
       undo : function()
       {
-        var elt;
-        for (n in this.notes)
+        for (const n in this.notes)
         {
-          elt = get(this.notes[n].id);
-          pos = this.notes[n].pos;
+          const elt = get(this.notes[n].id);
+          const pos = this.notes[n].pos;
           elt.style.left = pos.x + 'px';
           elt.style.top = pos.y + 'px';
         }
       },
       redo : function()
       {
-        var elt;
-        for (n in this.notes)
+        for (const n in this.notes)
         {
-          elt = get(this.notes[n].id);
-          pos = this.notes[n].pos.add(this.off);
+          const elt = get(this.notes[n].id);
+          const pos = this.notes[n].pos.add(this.off);
           elt.style.left = pos.x + 'px';
           elt.style.top = pos.y + 'px';
         }
@@ -806,10 +804,9 @@ SelectedObjectDrag.prototype.deselect = function()
     workspace.history.add(f);
   }
   // reset the border color to black
-  var elt;
-  for (var n in this.notes)
+  for (const n in this.notes)
   {
-    elt = get(this.notes[n].id);
+    const elt = get(this.notes[n].id);
     elt.style.border =  noteBorder + 'px ' + noteBorderColor + ' solid';
   }
 };
@@ -855,11 +852,11 @@ function SelectedObjectResize(note, pnotePosRel)
  */
 SelectedObjectResize.prototype.update = function(md)
 {
-  var elt = get(this.note.id);
+  const elt = get(this.note.id);
 
   // this depends on which edge they grabbed
-  var minSize = 10;
-  var offset = md.curPos.sub(md.downPos);
+  const minSize = 10;
+  const offset = md.curPos.sub(md.downPos);
   if (this.edges['top'])
   {
     if (this.size.y - offset.y > minSize)
@@ -884,8 +881,8 @@ SelectedObjectResize.prototype.update = function(md)
 
   if (this.note.parent.edit == this.note)
   {
-    var edit = get(this.note.id + 'text');
-    var pSize = this.note.getCorrectedSize();
+    const edit = get(this.note.id + 'text');
+    const pSize = this.note.getCorrectedSize();
     pSize.x -= 2*(noteBorder+notePadding+1);
     pSize.y -= 2*(noteBorder+notePadding+1) + 16;
     edit.style.height = Math.max(pSize.y, 10) + 'px';
@@ -900,11 +897,11 @@ SelectedObjectResize.prototype.update = function(md)
 SelectedObjectResize.prototype.deselect = function()
 {
   // add information to the undo stack if the item was resized
-  var curSize = this.note.getSize();
+  const curSize = this.note.getSize();
 
   if (!this.size.equals(curSize))
   {
-    var f = {
+    const f = {
       title : strings.HISTORY_RESIZE_NOTE,
       usize : this.size,
       upos : this.pos,
@@ -921,7 +918,7 @@ SelectedObjectResize.prototype.deselect = function()
       },
       set : function(size, pos)
       {
-        var elt = get(this.id);
+        const elt = get(this.id);
         elt.style.top = pos.y + 'px';
         elt.style.left = pos.x + 'px';
         elt.style.height = size.y + 'px';
@@ -937,7 +934,7 @@ SelectedObjectResize.prototype.deselect = function()
 /**
  * @class A class that maintains the undo/redo stacks.
  */
-var History =
+const History =
 {
   /**
    * The number of items to keep in the undo stack.
@@ -974,7 +971,7 @@ var History =
   {
     if (this.undoStack.length > 0)
     {
-      var f = this.undoStack.pop();
+      const f = this.undoStack.pop();
       this.redoStack.push(f);
       f.undo();
       this.updateTitles();
@@ -987,7 +984,7 @@ var History =
   {
     if (this.redoStack.length > 0)
     {
-      var f = this.redoStack.pop();
+      const f = this.redoStack.pop();
       this.undoStack.push(f);
       f.redo();
       this.updateTitles();
@@ -998,7 +995,7 @@ var History =
    */
   updateTitles : function()
   {
-    var elt = get('undoImg');
+    let elt = get('undoImg');
     if (0 == this.undoStack.length)
     {
       elt.title = strings.HISTORY_UNDO_EMPTY;
@@ -1008,7 +1005,7 @@ var History =
     }
     else
     {
-      var tooltip = this.undoStack.length == 1 ? strings.HISTORY_UNDO_TOOLTIP
+      const tooltip = this.undoStack.length == 1 ? strings.HISTORY_UNDO_TOOLTIP
                                                : strings.HISTORY_UNDO_TOOLTIPS;
       elt.title = tooltip.replace("$1", this.undoStack[this.undoStack.length-1].title)
                          .replace("$2", this.undoStack.length);
@@ -1024,7 +1021,7 @@ var History =
     }
     else
     {
-      var tooltip = this.redoStack.length == 1 ? strings.HISTORY_UNDO_TOOLTIP
+      const tooltip = this.redoStack.length == 1 ? strings.HISTORY_UNDO_TOOLTIP
                                                : strings.HISTORY_UNDO_TOOLTIPS;
       elt.title = tooltip.replace("$1", this.redoStack[this.redoStack.length-1].title)
                          .replace("$2", this.redoStack.length);
@@ -1037,7 +1034,7 @@ var History =
 /**
  * @class A generator class that returns the position of the next new note.
  */
-var NotePos =
+const NotePos =
 {
   /**
    * @type int
@@ -1054,11 +1051,11 @@ var NotePos =
    * @type Point
    */
   nextPos : function(w, h) {
-    var ret = new Point(this.x, this.y);
+    const ret = new Point(this.x, this.y);
 
     this.x += 20;
     this.y += 20;
-    var s = getPageSize();
+    const s = getPageSize();
 
     if (this.x + w > s.x || this.y + h > s.y) {
       this.x = 40;
@@ -1074,7 +1071,7 @@ var NotePos =
  * @class A class that represents the workspace.  This includes maintaining
  * information about the notes and undo/redo information.
  */
-var workspace =
+const workspace =
 {
   /**
    * A dictionary of all the notes.
@@ -1178,8 +1175,8 @@ var workspace =
       note.id = "note" + this.nextNoteNum;
 
       // a new note is being made, save information to the undo stack
-      var self = this;
-      var f = {
+      const self = this;
+      const f = {
         title : strings.HISTORY_CREATE_NOTE,
         nnn : this.nextNoteNum,
         id : note.id,
@@ -1211,10 +1208,10 @@ var workspace =
     if (!('height' in note)) note.height = 150;
     if (!('width' in note)) note.width = 250;
 
-    var pos;
+    let pos;
     if (!('xPos' in note) || !('yPos' in note)) {
       pos = this.notePos.nextPos(note.width, note.height);
-      var content = get('content');
+      const content = get('content');
       pos.x += parseInt(content.scrollLeft);
       pos.y += parseInt(content.scrollTop);
     }
@@ -1228,7 +1225,7 @@ var workspace =
     // disable editing of a different note
     this.editOff();
 
-    var newDiv = document.createElement('div');
+    const newDiv = document.createElement('div');
     newDiv.className = 'note';
     newDiv.id = note.id;
     // work around a safari bug
@@ -1239,7 +1236,7 @@ var workspace =
     get('content').appendChild(newDiv);
 
     //document.body.innerHTML += newDiv;
-    var elt = get(note.id);
+    const elt = get(note.id);
     elt.style.backgroundColor = note.bgcolor;
     elt.style.width = note.width + 'px';
     elt.style.height = note.height + 'px';
@@ -1255,7 +1252,7 @@ var workspace =
       this.topId = note.id;
     } else {
       elt.style.zIndex = note.zIndex;
-      var topElt = get(this.topId);
+      const topElt = get(this.topId);
       if (topElt) {
         if (parseInt(note.zIndex) > parseInt(topElt.style.zIndex)) {
           this.topId = note.id;
@@ -1265,7 +1262,7 @@ var workspace =
       }
     }
     this.numNotes++;
-    var nNote = new Note(elt, this, note.text);
+    const nNote = new Note(elt, this, note.text);
     this.notes[nNote.id] = nNote;
 
     newDiv.addEventListener('mouseover', nNote.mouseOver.bind(nNote));
@@ -1304,9 +1301,9 @@ var workspace =
 
   docMove : function(x, y) {
     if (this.mouseDown) {
-      var offX = this.mouseDown.x - x;
-      var offY = this.mouseDown.y - y;
-      var content = get('content');
+      const offX = this.mouseDown.x - x;
+      const offY = this.mouseDown.y - y;
+      const content = get('content');
       content.scrollTop += offY;
       content.scrollLeft += offX;
       this.mouseDown.x = x;
@@ -1321,7 +1318,7 @@ var workspace =
   {
     if (this.edit)
     {
-      var textbox = get(this.edit.id + 'text');
+      const textbox = get(this.edit.id + 'text');
       if (BROWSER_SAFARI != browser) {
         textbox.parentNode.style.overflow = 'auto';
       }
@@ -1330,7 +1327,7 @@ var workspace =
       // undo stack if it did.
       if (textbox.value != this.edit.text)
       {
-        var f = {
+        const f = {
           title : strings.HISTORY_EDIT_NOTE,
           utext : this.edit.text,
           rtext : textbox.value,
@@ -1359,9 +1356,9 @@ var workspace =
     if (this.notes) {
       // it's not possible to sort an associative array
       // so we copy it into a regular array first
-      var nArray = [];
-      var i = 0;
-      for (var nid in this.notes) {
+      const nArray = [];
+      let i = 0;
+      for (const nid in this.notes) {
         nArray[i] = this.notes[nid];
         ++i;
       }
@@ -1369,7 +1366,7 @@ var workspace =
       nArray.sort(cmpNotesZ);
 
       // set zIndex based on order
-      var found = 0;
+      let found = 0;
       for (i = 0; i < nArray.length; ++i) {
         if (nArray[i].id == topNoteID) {
           found = 1;
@@ -1403,23 +1400,23 @@ var workspace =
    * @param {string} text the regular expression to filter by
    */
   filter : function(text) {
-    var shouldHide;
+    let shouldHide;
     if (text.trim().indexOf(strings.COLOR + ":") == 0) {
-      var color = text.trim().substring(strings.COLOR.length + 1);
+      const color = text.trim().substring(strings.COLOR.length + 1);
       shouldHide = function(note) {
         return (colorMap[note.bgColor.toString()] == color);
       };
     }
     else {
-      var reg = new RegExp(text, 'i');
+      const reg = new RegExp(text, 'i');
       shouldHide = function(note) {
         return reg.test(note.text);
       };
     }
 
-    for (n in this.notes) {
-      var note = this.notes[n];
-      var elt = get(note.id);
+    for (const n in this.notes) {
+      const note = this.notes[n];
+      const elt = get(note.id);
       if (shouldHide(note)) {
         elt.className = 'note';
         if (BROWSER_SAFARI == browser) elt.style.opacity = '0.99';
@@ -1441,11 +1438,11 @@ var workspace =
    * Update the background color and tool tips of the mini notes.
    */
   updateMiniBox : function() {
-    var mini = get('mini');
-    var vNotes = 0;
-    var total = 0;
+    const mini = get('mini');
+    let vNotes = 0;
+    let total = 0;
 
-    for (n in this.notes) {
+    for (const n in this.notes) {
       ++total;
       if (get('m' + n).className.indexOf("noteHide") == -1)
         ++vNotes;
@@ -1454,8 +1451,8 @@ var workspace =
     // Set the width of the mini div.
     // After the first 9 notes, we add space for additional notes
     // 10 is the width of a note.
-    var miniNoteWidth = 10;
-    var diff = parseInt(Math.max(0, total - 9) / 2) * miniNoteWidth;
+    const miniNoteWidth = 10;
+    const diff = parseInt(Math.max(0, total - 9) / 2) * miniNoteWidth;
     mini.style.width = (diff + miniWidth) + 'px';
 
     if (0 == total)
@@ -1484,11 +1481,11 @@ var workspace =
       'width' : '270',
       'bgcolor' : '#ffff30'
     } );
-    var txt = strings.LOADVERSIONS_INIT;
+    const txt = strings.LOADVERSIONS_INIT;
     this.notes['load'].setText(txt);
     this.reZOrder('load');
 
-    var failed = function() {
+    const failed = function() {
       workspace.loadlistFailed(offset);
     };
     fetch('getdates.py?name=' + escape(myescape(this.name))
@@ -1509,25 +1506,25 @@ var workspace =
     if (!this.notes['load'])
       return;
     this.notes['load'].setText(strings.LOADVERSIONS_ERROR);
-    var retry = document.createElement('a');
+    const retry = document.createElement('a');
     retry.className = 'fakelink';
     retry.textContent = strings.LOADVERSIONS_RETRY;
     retry.addEventListener('click', function() { workspace.loadlist(offset); });
-    var div = document.createElement('div');
+    const div = document.createElement('div');
     div.style.textAlign = 'center';
     div.appendChild(retry);
     get('load').appendChild(div);
   },
 
   loadlistCallback : function(text, offset) {
-    var loadTimes = text.split('|');
+    const loadTimes = text.split('|');
     this.createNote( {
       'id': 'load',
       'height': '130',
       'width': '270',
       'bgcolor': '#ffff30'
     } );
-    var note = this.notes['load'];
+    const note = this.notes['load'];
     db('resp: ' + text.trim());
     db('resplen: ' + text.trim().length);
     if (text.trim() == '') {
@@ -1537,28 +1534,28 @@ var workspace =
     }
     note.setText(strings.LOADVERSIONS_ABOUT);
 
-    var form = document.createElement('form');
+    const form = document.createElement('form');
     form.method = 'GET';
     form.action = 'load.py';
     form.addEventListener('mousedown', stopPropagation);
-    var name = document.createElement('input');
+    const name = document.createElement('input');
     name.type = 'hidden';
     name.name = 'name';
     name.value = myescape(this.name);
-    var select = document.createElement('select');
+    const select = document.createElement('select');
     select.className = 'loadfrm';
     select.name = 'time';
-    for (var i = 0; i < loadTimes.length && i < numDates; i++) {
+    for (let i = 0; i < loadTimes.length && i < numDates; i++) {
       select.add(new Option(String(new MyDate(loadTimes[i])), loadTimes[i].trim()));
     }
-    var submit = document.createElement('input');
+    const submit = document.createElement('input');
     submit.type = 'submit';
     submit.value = 'load';
 
-    var links = document.createElement('span');
+    const links = document.createElement('span');
     links.style.fontSize = '0.8em';
-    var pageLink = function(text, newOffset) {
-      var a = document.createElement('a');
+    const pageLink = function(text, newOffset) {
+      const a = document.createElement('a');
       a.className = 'fakelink';
       a.textContent = text;
       a.addEventListener('click', function() { workspace.loadlist(newOffset); });
@@ -1576,7 +1573,7 @@ var workspace =
     links.append(document.createElement('br'), strings.LOADVERSIONS_DATE_NOTE);
 
     form.append(name, select, submit, document.createElement('br'), links);
-    var div = document.createElement('div');
+    const div = document.createElement('div');
     div.style.textAlign = 'center';
     div.appendChild(form);
     get('load').appendChild(div);
@@ -1611,7 +1608,7 @@ var workspace =
     if (this.pollRunning || this.warningShown() || 'hidden' == document.visibilityState)
       return;
     this.pollRunning = true;
-    var failed = function(status) {
+    const failed = function(status) {
       db('getrecent: ' + status);
       workspace.pollRunning = false;
       workspace.schedulePoll();
@@ -1632,7 +1629,7 @@ var workspace =
 
   checkUpdatedCallback : function(text) {
     // Times are microseconds since the epoch, exact in a JS number until 2255.
-    var loadTime = Number(text.trim());
+    const loadTime = Number(text.trim());
     if (this.warningShown()) {
       // shown while the check was in flight; closing it checks again
     } else if (loadTime > Math.max(this.loadedTime, this.warnedTime)) {
@@ -1659,7 +1656,7 @@ var workspace =
    */
   showConflict : function(time) {
     // this replaces the collision warning
-    for (var id of ['updated', 'conflict']) {
+    for (const id of ['updated', 'conflict']) {
       if (this.notes[id])
         this.notes[id].destroy();
     }
@@ -1673,23 +1670,23 @@ var workspace =
     } );
     this.notes['conflict'].setText(strings.CONFLICT_WARNING);
 
-    var self = this;
-    var choice = function(text, onclick) {
-      var a = document.createElement('a');
+    const self = this;
+    const choice = function(text, onclick) {
+      const a = document.createElement('a');
       a.className = 'fakelink';
       a.textContent = text;
       a.addEventListener('click', onclick);
-      var li = document.createElement('li');
+      const li = document.createElement('li');
       li.appendChild(a);
       return li;
     };
-    var newer = document.createElement('a');
+    const newer = document.createElement('a');
     newer.href = 'load.py?name=' + escape(myescape(this.name)) + '&time=' + time;
     newer.target = '_blank';
     newer.textContent = strings.CONFLICT_OPEN_NEWER;
-    var newerItem = document.createElement('li');
+    const newerItem = document.createElement('li');
     newerItem.appendChild(newer);
-    var list = document.createElement('ul');
+    const list = document.createElement('ul');
     list.addEventListener('mousedown', stopPropagation);
     list.append(
       newerItem,
@@ -1714,10 +1711,10 @@ var workspace =
   toString : function()
   {
     // Workspace names are stored in myescape() form (see objects.js).
-    var ret = "<workspace name='" + myescape(this.name) + "'";
+    let ret = "<workspace name='" + myescape(this.name) + "'";
     ret += " nextNoteNum='" + this.nextNoteNum + "'";
     ret += ">\n";
-    for (nid in this.notes)
+    for (const nid in this.notes)
       ret += this.notes[nid].toXML() + "\n";
     return ret + "</workspace>"
   },
@@ -1728,13 +1725,13 @@ var workspace =
    */
   selectNote : function(diff)
   {
-    var max = -1;
-    var maxNote;
-    var noteArr = [];
+    let max = -1;
+    let maxNote;
+    const noteArr = [];
     // determine which note is on top
-    for (var n in this.notes)
+    for (const n in this.notes)
     {
-      var cur = parseInt(get(this.notes[n].id).style.zIndex);
+      const cur = parseInt(get(this.notes[n].id).style.zIndex);
       if (cur > max)
       {
         max = cur;
@@ -1750,14 +1747,14 @@ var workspace =
   save : function()
   {
     // there have to be changes to the workspace before saving is enabled
-    var s = get('saveImg');
+    const s = get('saveImg');
     if (s.className == 'controlsDisabled')
       return;
 
     s.src = 'images/saving.gif';
     this.editOff();
 
-    var failed = function(status) {
+    const failed = function(status) {
       db(status);
       alert(strings.SAVE_STATUS_ERROR);
       get('saveImg').src = 'images/save.gif';
@@ -1779,8 +1776,8 @@ var workspace =
     }, function() { failed(0); });
   },
   saveCallback : function(text) {
-    var doc = new DOMParser().parseFromString(text, 'text/xml');
-    var status = doc.getElementsByTagName('status')[0];
+    const doc = new DOMParser().parseFromString(text, 'text/xml');
+    const status = doc.getElementsByTagName('status')[0];
     db("response: " + text);
     if (status && 'ok' == status.getAttribute('value')) {
       this.changed = false;
@@ -1805,7 +1802,7 @@ var workspace =
  */
 function db(msg) {
   if (debugOn) {
-    var elt = get('debug');
+    const elt = get('debug');
     elt.value = msg + '\n' + elt.value;
   }
 }
@@ -1816,33 +1813,33 @@ function db(msg) {
 function init()
 {
   if (debugOn) {
-    var debug = document.createElement('textarea');
+    const debug = document.createElement('textarea');
     debug.id = 'debug';
     debug.cols = 50;
     debug.rows = 10;
     debug.style.cssText = 'position:absolute;top:26px;right:10px;';
-    var clear = document.createElement('input');
+    const clear = document.createElement('input');
     clear.type = 'button';
     clear.value = 'clear';
     clear.addEventListener('click', function() { debug.value = ''; });
-    var form = document.createElement('form');
+    const form = document.createElement('form');
     form.append(debug, clear);
     get('db').appendChild(form);
   }
 
   // preload the close image
-  var closeImg = new Image();
+  const closeImg = new Image();
   closeImg.src = 'images/close.gif';
 
 
-  var toolbar = get('toolbar');
+  const toolbar = get('toolbar');
   toolbar.addEventListener('mousedown', stopPropagation);
   get('newImg').addEventListener('click', function() { workspace.createNote(); });
   get('saveImg').addEventListener('click', function() { workspace.save(); });
   get('reloadImg').addEventListener('click', function() { workspace.loadlist(); });
   get('undoImg').addEventListener('click', function() { workspace.history.undo(); });
   get('redoImg').addEventListener('click', function() { workspace.history.redo(); });
-  var textfilter = get('textfilter');
+  const textfilter = get('textfilter');
   textfilter.addEventListener('change', function() { workspace.filter(textfilter.value); });
   textfilter.addEventListener('keydown', function(ev) {
     if ('Enter' == ev.key)
@@ -1864,7 +1861,7 @@ function init()
    * chance to cancel.
    */
   window.addEventListener('beforeunload', function(ev) {
-    var warning = winBeforeUnload();
+    const warning = winBeforeUnload();
     if (warning) {
       ev.preventDefault();
       ev.returnValue = warning;
@@ -1918,7 +1915,7 @@ function charRefs(str) {
  * @type string
  */
 function decodeCharRefs(text) {
-  var textarea = document.createElement('textarea');
+  const textarea = document.createElement('textarea');
   textarea.innerHTML = text.replace(/</g, '&lt;');
   return textarea.value;
 }
@@ -1937,10 +1934,10 @@ function docMouseDown(e) {
 
   // force a position update
   docMouseMove(e);
-  var curPos = workspace.mouse.curPos.copy();
+  const curPos = workspace.mouse.curPos.copy();
   // get rel pos
   // make sure we're not on a scrollbar
-  var content = get('content');
+  const content = get('content');
   if (curPos.x < content.clientWidth && curPos.y < content.clientHeight) {
     workspace.mouseDown = workspace.mouse.curPos.copy();
   }
@@ -1957,12 +1954,12 @@ function docKeyDown(ev) {
   // the keydown event only seems to be a document event so we
   // can't put the event on the div layer.  Instead, events
   // need to be passed to the note that is being hovered over.
-  var key = String.fromCharCode(ev.keyCode);
+  const key = String.fromCharCode(ev.keyCode);
+  let n;
   if (workspace.shortcuts && !workspace.edit) {
     // blah, I should turn this into a map
-    var n;
     if ('P' == key && ev.altKey) {
-      var note = workspace.createNote();
+      const note = workspace.createNote();
       note.mouseDblClick();
     } else if ('S' == key && ev.altKey) {
       workspace.save();
