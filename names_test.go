@@ -75,15 +75,13 @@ func TestCanonicalWsNameMatchesJavaScript(t *testing.T) {
 		t.Skip("needs node")
 	}
 	script := `
-		const vm = require('vm'), fs = require('fs');
-		const ctx = {};
-		vm.createContext(ctx);
-		vm.runInContext(fs.readFileSync('objects.js', 'utf8'), ctx);
-		const chars = [];
-		for (let i = 0; i < 0x10000; i++) chars.push(String.fromCharCode(i));
-		chars.push('\u{1D400}', '\u{1F600}', 'my-notes.txt', 'Bogotá');
-		console.log(JSON.stringify(chars.map(
-			c => [c, escape(c), ctx.myescape(c)])));
+		import('./objects.js').then(({myescape}) => {
+			const chars = [];
+			for (let i = 0; i < 0x10000; i++) chars.push(String.fromCharCode(i));
+			chars.push('\u{1D400}', '\u{1F600}', 'my-notes.txt', 'Bogotá');
+			console.log(JSON.stringify(chars.map(
+				c => [c, escape(c), myescape(c)])));
+		});
 	`
 	out, err := exec.Command("node", "-e", script).Output()
 	if err != nil {
@@ -178,12 +176,11 @@ func TestStoredNamesBrowserRoundTrip(t *testing.T) {
 		names[i] = w.Name
 	}
 	script := `
-		const vm = require('vm'), fs = require('fs');
-		const ctx = {};
-		vm.createContext(ctx);
-		vm.runInContext(fs.readFileSync('objects.js', 'utf8'), ctx);
-		const names = JSON.parse(fs.readFileSync(0, 'utf8'));
-		console.log(JSON.stringify(names.map(n => ctx.myescape(unescape(n)))));
+		const fs = require('fs');
+		import('./objects.js').then(({myescape}) => {
+			const names = JSON.parse(fs.readFileSync(0, 'utf8'));
+			console.log(JSON.stringify(names.map(n => myescape(unescape(n)))));
+		});
 	`
 	var resaved []string
 	runNode(t, script, names, &resaved)

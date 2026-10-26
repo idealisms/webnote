@@ -90,8 +90,9 @@ def run(browser, base, name, previous):
     page.on('pageerror', lambda e: problems.append('JavaScript error: %s' % e))
 
     page.goto(base + '/webnote/')
+    check(page.evaluate("document.activeElement.id") == 'fakeName', 'the home page focuses the name')
     page.fill('#fakeName', name)
-    page.click('input[value=load]')
+    page.press('#fakeName', 'Enter')
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
     check(page.evaluate('workspace.name') == name, 'home page form opens the workspace')
     check(page.inner_text('#wsname') == name and page.title() == name,
@@ -285,8 +286,11 @@ def run_ui(browser, base, name):
             route.abort()
     page.route('**/save.py*', on_save)
 
-    page.goto(base + '/webnote/' + urllib.parse.quote(urllib.parse.quote(name)))
+    page.goto(base + '/webnote/')
+    page.fill('#fakeName', name)
+    page.click('input[value=load]')
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
+    check(page.evaluate('workspace.name') == name, 'the home page\'s load button opens the workspace')
     if page.evaluate('workspace.numNotes'):
         raise BrowserTestError('workspace %r for the UI test must be empty' % name)
 
@@ -586,6 +590,11 @@ def run_ui(browser, base, name):
     page.goto(base + '/webnote/')
     check([d[0] for d in dialogs] == ['beforeunload'],
           'leaving with unsaved changes asks first')
+    page.click('input[value="Load Sample"]')
+    page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
+    check(page.evaluate('workspace.name') == 'Sample Workspace', 'the home page opens the sample')
+    check(not problems, 'no JavaScript errors on the home page or the sample%s' % (
+        '' if not problems else ': %s' % problems))
     page.close()
 
 

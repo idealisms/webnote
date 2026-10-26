@@ -2,11 +2,28 @@
  * @fileoverview A few generic objects and functions used by webnote.
  */
 
-'use strict';
-
 ///
 /// global methods
 ///
+
+/**
+ * Get a reference to an html object given the id.
+ * @param {string} id id of the object
+ * @type {HtmlElement}
+ */
+export function get(id) { return document.getElementById(id); }
+
+/**
+ * Write a message to the debug textarea, if there is one (see debugOn in
+ * webnote.js).
+ * @param {string} msg the message to display
+ */
+export function db(msg) {
+  const elt = get('debug');
+  if (elt)
+    elt.value = msg + '\n' + elt.value;
+}
+
 const hex2dec = function(h) { return parseInt(h, 16); };
 const dec2hex = function(d)
 {
@@ -43,7 +60,7 @@ function findPos(obj)
 /**
  * Get the position of a mouse event relative to the event target.
  */
-function findRelativeMousePos(ev) {
+export function findRelativeMousePos(ev) {
   const target = ev.target;
   const targetPos = findPos(target);
   const pagePos = new Point(ev.pageX, ev.pageY);
@@ -67,7 +84,7 @@ function findRelativeMousePos(ev) {
  * @param {int} y optional parameter for y
  * @constructor
  */
-function Point(x, y)
+export function Point(x, y)
 {
   /**
    * @type int
@@ -224,7 +241,7 @@ ColorHSV.prototype.adj = function(h, s, v)
  * of the following formats: rgb(##, ##, ##), #ffffff, or ffffff
  * @constructor
  */
-function Color(value)
+export function Color(value)
 {
   // constuctor creates object from a string
   // I keep all values in decimal
@@ -285,7 +302,7 @@ Color.prototype.hsvadj = function(h, s, v)
  * @param {String} us microseconds since the epoch, as the server sends them
  * @constructor
  */
-function MyDate(us)
+export function MyDate(us)
 {
   /**
    * The time rounded to the second, which is all toString() shows.
@@ -318,7 +335,7 @@ function isEsc(s)
  * since information in the db is already in this form, we'll keep it
  * in this form.
  */
-function myescape(s)
+export function myescape(s)
 {
   let ret = "";
   for (let i = 0; i < s.length; i++)

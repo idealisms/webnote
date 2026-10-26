@@ -11,32 +11,37 @@
 	</style>
 
   <link rel="SHORTCUT ICON" href="webnote_favicon.ico" type="image/x-icon"/>
-	  <script type="text/javascript" src="objects.js"></script>
-    <script type="text/javascript">
-function init()
-{
-  document.getElementById('fakeName').focus()
-}
+    <script type="module">
+// ?module: browsers may still have the classic objects.js cached at its
+// plain URL, which has no exports.
+import {myescape} from './objects.js?module';
 
-function load()
+function open(name)
 {
   // Workspace names are stored in myescape() form (see objects.js).
-  var name = escape(escape(myescape(document.getElementById('fakeName').value)));
+  name = escape(escape(myescape(name)));
   if (0 == name.length)
     return;
-    
+
   document.location.href = "/webnote/" + name;
 }
 
-function sample()
-{
-  var name = escape(escape(myescape('Sample Workspace')));
-  document.location.href = "/webnote/" + name;
-}
+const fakeName = document.getElementById('fakeName');
+document.getElementById('loadForm').addEventListener('submit', function(ev) {
+  ev.preventDefault();
+  open(fakeName.value);
+});
+document.getElementById('loadButton').addEventListener('click', function() {
+  open(fakeName.value);
+});
+document.getElementById('sampleButton').addEventListener('click', function() {
+  open('Sample Workspace');
+});
+fakeName.focus();
     </script>
 </head>
 
-<body onload="init()">
+<body>
   <div class="tnote" style="margin: 30px 15% 10px 15%;">
 
 
@@ -47,10 +52,10 @@ function sample()
 
   <div class="tnote">
                 <h3>Create or Load a Workspace</h3>
-                <form action="javascript:load()">
+                <form id="loadForm">
                 <p style="text-align: center;">
                     <input id="fakeName" size="14"/>
-                    <input type="button" value="load" onclick="load()"/>
+                    <input id="loadButton" type="button" value="load"/>
 
                 </p>
                 </form>
@@ -65,7 +70,7 @@ function sample()
                 to explore the sample workspace.</p>
 
                 <p style="text-align: center">
-                <input type="button" value="Load Sample" onclick="sample()"/>
+                <input id="sampleButton" type="button" value="Load Sample"/>
                 </p>
   </div>
   <div class="tnote" style="margin-top:20px;">

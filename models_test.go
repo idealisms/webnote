@@ -669,7 +669,7 @@ func TestNotesSampleSaveRoundTrip(t *testing.T) {
 		s.ServeHTTP(rec, httptest.NewRequest(method, path, strings.NewReader(body)))
 		return rec
 	}
-	notesOnPage := regexp.MustCompile(`(?s)var notes = (.*);\n  for \(var n in notes\)`)
+	notesOnPage := regexp.MustCompile(`(?s)const notes = (.*);\n  for \(const n in notes\)`)
 	for i, r := range records {
 		if i%100 == 0 {
 			emulatorReset(t) // The emulator slows down as it fills.

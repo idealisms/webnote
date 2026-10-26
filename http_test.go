@@ -221,15 +221,23 @@ func truncate(s string) string {
 
 var rssLinkHref = regexp.MustCompile(`<a id='rsslink' href="[^"]*">`)
 
+// pageValuePatterns find the values in a page: the name, notes, title,
+// loadedTime and nextNoteNum. Python's script used var and set adminEmail
+// after loadedTime; the module uses const and calls init().
 var pageValuePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?s)workspace\.setName\(unescape\('(.*)'\)\);\n  workspace\.loadedTime`),
-	regexp.MustCompile(`(?s)var notes = (.*);\n  for \(var n in notes\)`),
+	regexp.MustCompile(`(?s)(?:var|const) notes = (.*);\n  for \((?:var|const) n in notes\)`),
 	regexp.MustCompile(`(?s)<title> (.*)</title>\n</head>`),
-	regexp.MustCompile(`workspace\.loadedTime = (.*);\n  adminEmail`),
+	regexp.MustCompile(`workspace\.loadedTime = (.*);\n  (?:adminEmail|init)`),
+	regexp.MustCompile(`workspace\.nextNoteNum = (.*);`),
 }
 
+// pageScripts is the head's scripts, which are ES modules since Python's
+// classic scripts. checkPage compares the values in them, and the page around
+// them byte for byte.
+var pageScripts = regexp.MustCompile(`(?s)\n    <script .*</script>\n`)
+
 var inlineHandlersSincePython = strings.NewReplacer(
-	"}\n// -->", "}\nwindow.addEventListener('load', loadinit);\n// -->",
 	"<body onload='loadinit();' ", "<body ",
 	` onclick="workspace.createNote()"`, "",
 	` onclick="workspace.save()"`, "",
@@ -241,18 +249,18 @@ var inlineHandlersSincePython = strings.NewReplacer(
 
 // checkPage compares a workspace page with Python's. Python inserted values
 // unescaped; this port escapes them for their context, so the values are
-// compared after unescaping, and the rest byte for byte. Since the port,
-// loadedTime is epoch microseconds instead of a US/Eastern string, and the
-// script URLs have the version (empty in tests).
+// compared after unescaping, and the rest byte for byte, except the
+// scripts (see pageScripts). Since the port, loadedTime is epoch microseconds
+// instead of a US/Eastern string.
 func checkPage(t *testing.T, c *httpCase, got, want []byte) {
 	t.Helper()
-	gotSkeleton, wantSkeleton := strings.ReplaceAll(string(got), `.js?v="`, `.js"`), string(want)
+	gotSkeleton, wantSkeleton := string(got), string(want)
 	// Fixed since Python: the template had a stray `"""`, and the RSS link
 	// was a literal "%s.xml" (TestPageFeedLink checks the link).
 	wantSkeleton = strings.Replace(wantSkeleton, `type="text/css" />"""`, `type="text/css" />`, 1)
 	gotSkeleton = rssLinkHref.ReplaceAllString(gotSkeleton, `<a id='rsslink' href="%s.xml">`)
-	// Since Python, the page's event handlers are added by webnote.js and
-	// the inline script instead of inline attributes.
+	// Since Python, the page's event handlers are added by webnote.js
+	// instead of inline attributes.
 	wantSkeleton = inlineHandlersSincePython.Replace(wantSkeleton)
 	var gotValues, wantValues []string
 	for _, p := range pageValuePatterns {
@@ -266,6 +274,8 @@ func checkPage(t *testing.T, c *httpCase, got, want []byte) {
 		gotSkeleton = gotSkeleton[:gm[2]] + "@@" + gotSkeleton[gm[3]:]
 		wantSkeleton = wantSkeleton[:wm[2]] + "@@" + wantSkeleton[wm[3]:]
 	}
+	gotSkeleton = pageScripts.ReplaceAllString(gotSkeleton, "\n@@scripts@@\n")
+	wantSkeleton = pageScripts.ReplaceAllString(wantSkeleton, "\n@@scripts@@\n")
 	if gotSkeleton != wantSkeleton {
 		t.Errorf("%s: page differs outside the values\n got %q\nwant %q", c, truncate(gotSkeleton), truncate(wantSkeleton))
 	}
@@ -289,6 +299,9 @@ func checkPage(t *testing.T, c *httpCase, got, want []byte) {
 	}
 	if loaded != wantValues[3] {
 		t.Errorf("%s: page loadedTime %s (%s), want %s", c, gotValues[3], loaded, wantValues[3])
+	}
+	if gotValues[4] != wantValues[4] {
+		t.Errorf("%s: page nextNoteNum %s, want %s", c, gotValues[4], wantValues[4])
 	}
 }
 
@@ -389,7 +402,7 @@ var fixedSincePython = map[string]fixedResponse{
 
 	// The page passes the stored notes JSON through instead of Python's
 	// json.dumps(). The browser reads 1e400 as Infinity either way.
-	"GET /webnote/blob%2520overflow": {status: 200, contains: "var notes = [1e400, -1e400, 1e-400];"},
+	"GET /webnote/blob%2520overflow": {status: 200, contains: "const notes = [1e400, -1e400, 1e-400];"},
 
 	// Requests that can't be served as sent are 400s, not 500s. (So are
 	// saves Python answered with a 500; see badSaveSincePython.)
@@ -748,14 +761,14 @@ func TestEpochTimes(t *testing.T) {
 		{"99999999999999999999", "save1"},
 	} {
 		page := do("GET", "/webnote/ws?time="+c.time, "")
-		if c.want == "[]" && !strings.Contains(page, "var notes = [];") || c.want != "[]" && !strings.Contains(page, `"text":"`+c.want+`"`) {
+		if c.want == "[]" && !strings.Contains(page, "const notes = [];") || c.want != "[]" && !strings.Contains(page, `"text":"`+c.want+`"`) {
 			t.Errorf("time=%s: page doesn't have %s", c.time, c.want)
 		}
 	}
 	page := do("GET", "/webnote/ws", "")
 	for _, want := range []string{
 		"workspace.loadedTime = " + secondUs + ";",
-		`src="objects.js?v=v1"`, `src="strings.js?v=v1"`, `src="webnote.js?v=v1"`,
+		`src="strings.js?v=v1"`, `"./objects.js": "./objects.js?v=v1"`, `"./webnote.js": "./webnote.js?v=v1"`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page doesn't contain %q", want)
@@ -811,7 +824,7 @@ func TestPageEscapesNotes(t *testing.T) {
 	putNotes(t, ctx, client, w, at, strings.NewReplacer(`\u2028`, "\u2028", `\u2029`, "\u2029").Replace(notes))
 	rec := httptest.NewRecorder()
 	newTestServer(client, at).ServeHTTP(rec, httptest.NewRequest("GET", "/webnote/ws", nil))
-	want := `var notes = [{"id":"a","text":"\u003c/script\u003e\u003c!-- \u0026 \u2028 \u2029 \u003e"}];`
+	want := `const notes = [{"id":"a","text":"\u003c/script\u003e\u003c!-- \u0026 \u2028 \u2029 \u003e"}];`
 	if page := rec.Body.String(); rec.Code != 200 || !strings.Contains(page, want) {
 		t.Errorf("page %d doesn't contain %s:\n%s", rec.Code, want, truncate(page))
 	}

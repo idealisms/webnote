@@ -1,8 +1,9 @@
 {{/* Generated from the Python app's templates/workspace.html (rendered by
      Jinja with sentinel values) so the output matched byte for byte. Since then, the
-     script URLs have the version and loadedTime is epoch microseconds (see
-     checkPage in http_test.go). Values are escaped for their context
-     before they get here. */ -}}
+     script URLs have the version, loadedTime is epoch microseconds, and the
+     scripts are ES modules: the import map gives imported modules the
+     version too (see checkPage in http_test.go). Values are escaped for
+     their context before they get here. */ -}}
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html>
@@ -11,37 +12,34 @@
     <link rel="start"  type="text/html" href="/webnote/"
          title="Webnote - an online tool for taking notes">
     <link rel="SHORTCUT ICON" href="webnote_favicon.ico" type="image/x-icon">
-    <script type="text/javascript" src="objects.js?v={{.Version}}"></script>
     <script type="text/javascript" src="strings.js?v={{.Version}}"></script>
-    <script type="text/javascript" src="webnote.js?v={{.Version}}"></script>
-    <script type="text/javascript">
+    <script type="importmap">
+{"imports": {"./objects.js": "./objects.js?v={{.Version}}", "./webnote.js": "./webnote.js?v={{.Version}}"}}
+    </script>
+    <script type="module">
+import {Color, get, myescape} from './objects.js';
+import {adminEmail, bgColors, init, winBeforeUnload, workspace} from './webnote.js';
 
-<!--
+// For the browser console and browsertest.py.
+Object.assign(window, {Color, adminEmail, bgColors, get, myescape, winBeforeUnload, workspace});
+
 function loadinit()
 {
-  debugOn = 0;
   workspace.setName(unescape('{{.NameJS}}'));
   workspace.loadedTime = {{.LoadedTime}};
-  adminEmail = 'webnote@ponderer.org';
-  baseURI = '/webnote/';
-  numDates = 10;
   init();
 
-  var notes = {{.NotesJS}};
-  for (var n in notes) {
-    var note = notes[n];
+  const notes = {{.NotesJS}};
+  for (const n in notes) {
+    const note = notes[n];
     note['text'] = unescape(note['text']);
-    workspace.createNote(note, true);    
+    workspace.createNote(note, true);
   }
-
 
   workspace.nextNoteNum = {{.NextNoteNum}};
   workspace.changed = false;
-
-
 }
 window.addEventListener('load', loadinit);
-// -->
     </script>
     <link rel="stylesheet" href="style.css" type="text/css" />
     <title> {{.NameHTML}}</title>

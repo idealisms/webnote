@@ -2,9 +2,9 @@
 // `node --test` (js_test.go does, as part of `go test`). browsertest.py
 // covers the rest in real browsers.
 //
-// The scripts aren't modules yet, so each test loads them into a fresh
-// context the way the page does (their top-level vars end up on it), with
-// stand-ins for the few browser globals they touch.
+// Each test imports webnote.js afresh (a new query string makes a new
+// module), with stand-ins for the few browser globals it touches.
+// objects.js has no state, so the tests share it.
 
 'use strict';
 
@@ -14,25 +14,28 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const {pathToFileURL} = require('node:url');
 const vm = require('node:vm');
 
-function load() {
+// strings.js is a classic script that defines a global.
+vm.runInThisContext(fs.readFileSync(path.join(__dirname, 'strings.js.en'), 'utf8'));
+
+let loads = 0;
+async function load() {
   const elements = {};
-  const ctx = vm.createContext({
-    navigator: {userAgent: 'node'},
-    window: {innerWidth: 1280, innerHeight: 800},
-    document: {getElementById: id => elements[id] || (elements[id] = {})},
-  });
-  for (const f of ['strings.js.en', 'objects.js', 'webnote.js']) {
-    vm.runInContext(fs.readFileSync(path.join(__dirname, f), 'utf8'), ctx, {filename: f});
-  }
-  // Top-level let and const aren't properties of the context.
-  Object.assign(ctx, vm.runInContext('({workspace, History, NotePos, bgColors})', ctx));
-  return ctx;
+  const window = {innerWidth: 1280, innerHeight: 800};
+  const document = {getElementById: id => elements[id] || (elements[id] = {})};
+  Object.assign(globalThis, {window, document});
+  Object.defineProperty(globalThis, 'navigator',
+                        {value: {userAgent: 'node'}, configurable: true, writable: true});
+  const url = file => pathToFileURL(path.join(__dirname, file)).href;
+  const objects = await import(url('objects.js'));
+  const webnote = await import(url('webnote.js') + '?' + ++loads);
+  return {...objects, ...webnote, window, document};
 }
 
-test('getHTML: line breaks and headings', () => {
-  const {Note} = load();
+test('getHTML: line breaks and headings', async () => {
+  const {Note} = await load();
   const html = text => Note.prototype.getHTML.call({text});
   assert.equal(html(''), '');
   assert.equal(html('a\nb'), 'a<br />b');
@@ -45,8 +48,8 @@ test('getHTML: line breaks and headings', () => {
                '<h3>h3<br /></h3><h2>h2<br /></h2><h1>h1<br /></h1><h1>h1</h1>');
 });
 
-test('getHTML: links', () => {
-  const {Note} = load();
+test('getHTML: links', async () => {
+  const {Note} = await load();
   const html = text => Note.prototype.getHTML.call({text});
   const link = url => '<a href="' + url + '">' + url + '</a>';
   assert.equal(html('http://e.com/start'), link('http://e.com/start'));
@@ -59,14 +62,14 @@ test('getHTML: links', () => {
   assert.equal(html('http://e.com/a#frag. x'), link('http://e.com/a#frag.') + ' x');
 });
 
-test('charRefs stores characters 160-255 as references', () => {
-  const {charRefs} = load();
+test('charRefs stores characters 160-255 as references', async () => {
+  const {charRefs} = await load();
   assert.equal(charRefs('café  ÿ Ā 日 \u{1f600} &amp; <b>'),
                'caf&#233; &#160;&#255; Ā 日 \u{1f600} &amp; <b>');
 });
 
-test('myescape', () => {
-  const {myescape} = load();
+test('myescape', async () => {
+  const {myescape} = await load();
   assert.equal(myescape('aZ09_'), 'aZ09_');
   assert.equal(myescape('my-notes.txt'), 'my%2Dnotes%2Etxt');
   assert.equal(myescape('Bogotá café'), 'Bogot%E1%20caf%E9');
@@ -74,22 +77,22 @@ test('myescape', () => {
   assert.equal(myescape('י日\u{1f600}'), '%u5D9%u65E5%uD83D%uDE00');
 });
 
-test('Color parses and prints', () => {
-  const {Color} = load();
+test('Color parses and prints', async () => {
+  const {Color} = await load();
   for (const value of ['rgb(255, 16, 0)', 'ff1000', '#ff1000']) {
     assert.equal(new Color(value).toString(), '#ff1000', value);
   }
 });
 
-test('Color.hsvadj darkens each note color for hover', () => {
-  const {Color, bgColors} = load();
+test('Color.hsvadj darkens each note color for hover', async () => {
+  const {Color, bgColors} = await load();
   const hover = Array.from(bgColors, c => new Color(c).hsvadj(0, 0, -0.1).toString());
   assert.deepEqual(hover, ['#e5e52b', '#809ae5', '#72e564', '#e55656',
                            '#e5a239', '#e560d7', '#e5e5e5', '#969696']);
 });
 
-test('Point', () => {
-  const {Point} = load();
+test('Point', async () => {
+  const {Point} = await load();
   const p = new Point(3, 4);
   assert.equal(p.add(new Point(1, 2)).toString(), '(4, 6)');
   assert.equal(p.sub(new Point(1, 2)).toString(), '(2, 2)');
@@ -98,15 +101,15 @@ test('Point', () => {
   assert.equal(new Point().toString(), '(0, 0)');
 });
 
-test('MyDate rounds to the second and shows local time', () => {
-  const {MyDate} = load();
+test('MyDate rounds to the second and shows local time', async () => {
+  const {MyDate} = await load();
   const d = new MyDate('1792951601500001');
   assert.equal(d.dateobj.getTime(), 1792951602000);
   assert.match(String(new MyDate('0')), /1970.*9:00:00/, 'Tokyo is UTC+9');
 });
 
-test('History: undo, redo and the toolbar', () => {
-  const ctx = load();
+test('History: undo, redo and the toolbar', async () => {
+  const ctx = await load();
   const history = ctx.History;
   const log = [];
   const action = title => ({
@@ -139,8 +142,8 @@ test('History: undo, redo and the toolbar', () => {
   assert.equal(el('saveImg').className, 'controlsDisabled', 'undoing everything disables save');
 });
 
-test('History keeps the last 40 actions', () => {
-  const ctx = load();
+test('History keeps the last 40 actions', async () => {
+  const ctx = await load();
   const history = ctx.History;
   for (let i = 0; i < 45; i++) {
     history.add({title: String(i), undo() {}, redo() {}});
@@ -149,8 +152,8 @@ test('History keeps the last 40 actions', () => {
   assert.equal(history.undoStack[0].title, '5');
 });
 
-test('NotePos cascades new notes and wraps at the window edge', () => {
-  const ctx = load();
+test('NotePos cascades new notes and wraps at the window edge', async () => {
+  const ctx = await load();
   const pos = ctx.NotePos;
   assert.equal(pos.nextPos(250, 150).toString(), '(170, 40)');
   assert.equal(pos.nextPos(250, 150).toString(), '(190, 60)');
@@ -165,8 +168,8 @@ test('NotePos cascades new notes and wraps at the window edge', () => {
 });
 
 // The poll for saves from other clients, with timers and getrecent.py stubbed.
-function loadPolling() {
-  const ctx = load();
+async function loadPolling() {
+  const ctx = await load();
   const timers = new Map();
   let nextTimer = 1;
   ctx.window.setTimeout = (f, ms) => {
@@ -176,7 +179,7 @@ function loadPolling() {
   ctx.window.clearTimeout = id => timers.delete(id);
   ctx.document.visibilityState = 'visible';
   const requests = [];  // resolve or reject each to answer it
-  ctx.fetch = url => new Promise((resolve, reject) => requests.push({url, resolve, reject}));
+  globalThis.fetch = url => new Promise((resolve, reject) => requests.push({url, resolve, reject}));
   const ws = ctx.workspace;
   ws.name = 'ws';
   ws.loadedTime = 100;
@@ -195,7 +198,7 @@ function loadPolling() {
 }
 
 test('checkUpdated keeps one check going, through failures', async () => {
-  const {ctx, ws, timers, requests, answer, fire} = loadPolling();
+  const {ctx, ws, timers, requests, answer, fire} = await loadPolling();
   ws.schedulePoll();
   ws.schedulePoll();
   fire();
@@ -221,7 +224,7 @@ test('checkUpdated keeps one check going, through failures', async () => {
 });
 
 test('checkUpdated stops while the warning is shown', async () => {
-  const {ws, timers, requests, answer, fire} = loadPolling();
+  const {ws, timers, requests, answer, fire} = await loadPolling();
   ws.checkUpdated();
   await answer(200, '200');
   assert.ok('updated' in ws.notes, 'a newer save shows the warning');

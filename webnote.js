@@ -8,17 +8,21 @@
  * the notes or undo-ing/redo-ing an action.
  */
 
-'use strict';
+import {Color, MyDate, Point, db, findRelativeMousePos, get, myescape} from './objects.js';
 
 // global variables
 // user options
-let debugOn = 0;
+// Shows a box for db() messages.
+const debugOn = false;
 const notePadding = 5;
 const noteBorder = 3;
 const noteBorderColor = '#000';
 const miniWidth = 51;
 
-let adminEmail, baseURI, numDates;
+export const adminEmail = 'webnote@ponderer.org';
+const baseURI = '/webnote/';
+// How many revisions the history note lists at a time.
+const numDates = 10;
 
 // TODO: make it easier for users to make custom color maps
 const colorMap = {
@@ -31,7 +35,7 @@ const colorMap = {
   '#ffffff': strings.COLOR_WHITE,
   '#b0b0b0': strings.COLOR_GREY
 };
-const bgColors = [];
+export const bgColors = [];
 for (const c in colorMap)
 {
   bgColors.push(c);
@@ -57,7 +61,7 @@ const browser = navigator.userAgent.toLowerCase().indexOf('webkit') != -1
  * @param {workspace} p a reference to the parent workspace
  * @param {string} text the text of the note
  */
-function Note(note, p, text) {
+export function Note(note, p, text) {
   // constructor code
   if (typeof note == 'string')
     note = get(note);
@@ -934,7 +938,7 @@ SelectedObjectResize.prototype.deselect = function()
 /**
  * @class A class that maintains the undo/redo stacks.
  */
-const History =
+export const History =
 {
   /**
    * The number of items to keep in the undo stack.
@@ -1034,7 +1038,7 @@ const History =
 /**
  * @class A generator class that returns the position of the next new note.
  */
-const NotePos =
+export const NotePos =
 {
   /**
    * @type int
@@ -1071,7 +1075,7 @@ const NotePos =
  * @class A class that represents the workspace.  This includes maintaining
  * information about the notes and undo/redo information.
  */
-const workspace =
+export const workspace =
 {
   /**
    * A dictionary of all the notes.
@@ -1797,20 +1801,9 @@ const workspace =
 ///
 
 /**
- * Write a message to the debug textarea.
- * @param {string} msg the message to display
- */
-function db(msg) {
-  if (debugOn) {
-    const elt = get('debug');
-    elt.value = msg + '\n' + elt.value;
-  }
-}
-
-/**
  * Initialize the workspace.
  */
-function init()
+export function init()
 {
   if (debugOn) {
     const debug = document.createElement('textarea');
@@ -1901,7 +1894,7 @@ function preventDefault(e) {
  * @param {string} str
  * @type string
  */
-function charRefs(str) {
+export function charRefs(str) {
   return str.replace(/[\u00a0-\u00ff]/g, function(c) {
     return '&#' + c.charCodeAt(0) + ';';
   });
@@ -2013,7 +2006,7 @@ function docKeyDown(ev) {
 /**
  * Give the user a chance to save workspace.
  */
-function winBeforeUnload() {
+export function winBeforeUnload() {
   if (workspace.changed && workspace.name != "Sample Workspace") {
     return strings.UNLOAD_WARNING;
   }
@@ -2027,9 +2020,3 @@ function getPageSize() {
   return new Point(window.innerWidth, window.innerHeight);
 }
 
-/**
- * Get a reference to an html object given the id.
- * @param {string} id id of the object
- * @type {HtmlElement}
- */
-function get(id) { return document.getElementById(id); }
