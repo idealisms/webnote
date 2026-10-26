@@ -1,0 +1,17 @@
+[
+  {
+    "name": "keep-newest-app-images",
+    "action": {"type": "Keep"},
+    "mostRecentVersions": {"packageNamePrefixes": ["app/default"], "keepCount": 3}
+  },
+  {
+    "name": "keep-build-cache",
+    "action": {"type": "Keep"},
+    "condition": {"packageNamePrefixes": ["build-cache"]}
+  },
+  {
+    "name": "delete-older-images",
+    "action": {"type": "Delete"},
+    "condition": {"olderThan": "1d"}
+  }
+]
