@@ -1391,6 +1391,9 @@ var workspace =
   {
     this.name = n;
     get('wsname').textContent = this.name;
+    // The page's <title> has the name as the URL had it, which for links
+    // from the client is in myescape() form.
+    document.title = this.name;
   },
 
   /**

@@ -94,7 +94,13 @@ def run(browser, base, name, previous):
     page.click('input[value=load]')
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
     check(page.evaluate('workspace.name') == name, 'home page form opens the workspace')
-    check(page.inner_text('#wsname') == name, 'the toolbar shows the name')
+    check(page.inner_text('#wsname') == name and page.title() == name,
+          'the toolbar and the title show the name')
+    # The links the client builds (escape(escape(myescape(name)))).
+    page.goto(base + '/webnote/' + page.evaluate('escape(escape(myescape(workspace.name)))'))
+    page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
+    check(page.evaluate('workspace.name') == name and page.title() == name,
+          'so does the workspace\'s link')
     workspace_page = page.url
 
     start_texts = note_texts(page)
