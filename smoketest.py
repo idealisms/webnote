@@ -81,7 +81,7 @@ def check(condition, message):
 
 
 def get_notes(page):
-    match = re.search(r'var notes = (.*);\n', page)
+    match = re.search(r'(?:var|const) notes = (.*);\n', page)
     if not match:
         raise SmokeTestError('no notes JSON in workspace page')
     return json.loads(match.group(1))
