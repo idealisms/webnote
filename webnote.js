@@ -1767,6 +1767,10 @@ export const workspace =
     const s = get('saveImg');
     if (s.className == 'controlsDisabled')
       return;
+    // A second save sent before the first answers would carry the same
+    // loadedTime, so it would conflict with the first.
+    if (s.dataset.state == 'saving')
+      return;
 
     this.setSaveState('saving');
     this.editOff();

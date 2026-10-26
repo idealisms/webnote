@@ -248,3 +248,24 @@ test('checkUpdated stops while the warning is shown', async () => {
   ws.checkUpdated();
   assert.equal(requests.length, 0);
 });
+
+test('save ignores clicks while a save is in flight', async () => {
+  const {ctx, ws, requests, answer} = await loadPolling();
+  ctx.document.getElementById('saveImg').className = 'controls';
+  ctx.document.getElementById('saveImg').dataset = {};
+  ws.editOff = () => {};
+  ws.toString = () => '<workspace/>';
+  ws.save();
+  ws.save();
+  assert.equal(requests.length, 1, 'one save until the first answers');
+  assert.match(requests[0].url, /^save\.py\?epoch=1&loaded=100$/);
+  const alerts = [];
+  globalThis.alert = message => alerts.push(message);
+  await answer(500, 'error');
+  assert.equal(alerts.length, 1);
+
+  // After an answer, saving works again.
+  ws.save();
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /loaded=100$/);
+});
