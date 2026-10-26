@@ -48,11 +48,11 @@ window.addEventListener('load', loadinit);
   <div id='content'>
     <div id='toolbar'>
         <div class='controls'>
-          <img id="newImg" src='images/new.gif' class='controls' alt='new note icon' />
-          <img id="saveImg" src='images/save.gif' class='controlsDisabled' alt='disk icon (save)' />
-          <img id="reloadImg" src='images/reload.gif' class='controls' alt='reload icon' />
-          <img id="undoImg" src='images/undo.gif' class='controlsDisabled' alt='undo icon' />
-          <img id="redoImg" src='images/redo.gif' class='controlsDisabled' alt='redo icon' />
+          <button type="button" id="newImg" class='controls'><svg viewBox="0 0 16 16" aria-hidden="true"><rect class="paper" x="2.5" y="2.5" width="11" height="11"/><path d="M8 5.2v5.6M5.2 8h5.6"/></svg></button>
+          <button type="button" id="saveImg" class='controlsDisabled'><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.6 12.5h7.2a2.9 2.9 0 0 0 .4-5.77A4.1 4.1 0 0 0 4.3 6.1a3.2 3.2 0 0 0 .3 6.4z"/><path class="arrow" d="M8 11.2V7.2M6.4 8.7L8 7.1l1.6 1.6"/><path class="check" d="M6.1 9.3l1.4 1.4 2.6-2.8"/></svg></button>
+          <button type="button" id="reloadImg" class='controls'><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.3 8a5.7 5.7 0 1 0 1.7-4L2.3 5.6M2.3 2.4v3.2h3.2M8 5v3l2.2 1.3"/></svg></button>
+          <button type="button" id="undoImg" class='controlsDisabled'><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.8 9.3L2.5 6l3.3-3.3M2.5 6h7.3a3.7 3.7 0 0 1 0 7.4H7.5"/></svg></button>
+          <button type="button" id="redoImg" class='controlsDisabled'><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 9.3L13.5 6l-3.3-3.3M13.5 6H6.2a3.7 3.7 0 0 0 0 7.4h2.3"/></svg></button>
         </div>
         <div id='filters'>
             <input style='width: 135px; padding: 1px 2px 1px 2px;' id='textfilter' />
@@ -62,7 +62,7 @@ window.addEventListener('load', loadinit);
         <div id='mini'>
         </div>
         <div id='links'>
-          <a id='rsslink' href="{{.FeedURL}}"><img style='margin: 6px 2px;border:0;width:19px;height:9px;' src='images/minixml.gif' /></a>
+          <a id='rsslink' href="{{.FeedURL}}"><svg viewBox="0 0 14 14" aria-hidden="true"><rect width="14" height="14" rx="3"/><circle cx="4" cy="10" r="1.4"/><path d="M3 6.4A4.6 4.6 0 0 1 7.6 11M3 2.9A8.1 8.1 0 0 1 11.1 11"/></svg></a>
         </div>
         <div id='wsname'>
         </div>

@@ -87,22 +87,91 @@ div.controls {
   margin-left: 4px;
   padding-top: 2px;
 }
-img.controls {
+/* The toolbar's buttons: inline SVG icons, drawn with navy strokes. */
+button.controls, button.controlsDisabled {
   margin: 1px;
+  padding: 0;
+  border: 0;
   width: 16px;
   height: 16px;
+  background: none;
+  color: #000080;
+  vertical-align: top;
 }
-img.controls:hover {
+button.controls:hover {
   background-color: #808080;
 }
-img.controlsDisabled {
-  margin: 1px;
+button.controlsDisabled {
+  opacity: 0.5;
+}
+button.controls:focus-visible, button.controlsDisabled:focus-visible, #rsslink:focus-visible {
+  outline: 2px solid #000080;
+  outline-offset: 1px;
+}
+div.controls svg {
+  display: block;
   width: 16px;
   height: 16px;
-  opacity:0.5;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-img.controls:hover {
-  background-color: #808080;
+div.controls svg .paper {
+  fill: #ffff30;
+  stroke: #000;
+  stroke-width: 1.2;
+}
+/* Saving: the arrow rises out of the cloud, over and over. Saved: a check
+   replaces it for a moment (see workspace.save). */
+#saveImg .arrow, #saveImg .check {
+  transform-box: fill-box;
+}
+#saveImg .check {
+  stroke: #0b5a1f;
+  opacity: 0;
+}
+#saveImg[data-state=saving] .arrow {
+  animation: save-rise 0.9s ease-in infinite;
+}
+@keyframes save-rise {
+  0% { transform: translateY(3px); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: translateY(-4px); opacity: 0; }
+}
+#saveImg[data-state=saved] {
+  opacity: 1;
+}
+#saveImg[data-state=saved] .arrow {
+  opacity: 0;
+}
+#saveImg[data-state=saved] .check {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  #saveImg[data-state=saving] .arrow {
+    animation: none;
+  }
+}
+#rsslink svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 5px 4px;
+}
+#rsslink rect {
+  fill: #f26522;
+}
+#rsslink circle {
+  fill: #fff;
+}
+#rsslink path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.6;
+  stroke-linecap: round;
 }
 
 #wsname {

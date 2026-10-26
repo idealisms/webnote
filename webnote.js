@@ -1768,13 +1768,13 @@ export const workspace =
     if (s.className == 'controlsDisabled')
       return;
 
-    s.src = 'images/saving.gif';
+    this.setSaveState('saving');
     this.editOff();
 
     const failed = function(status) {
       db(status);
       alert(strings.SAVE_STATUS_ERROR);
-      get('saveImg').src = 'images/save.gif';
+      workspace.setSaveState('');
     };
     fetch('save.py?epoch=1&loaded=' + this.loadedTime,
           {method: 'POST', body: workspace.toString()}).then(function(response) {
@@ -1800,13 +1800,27 @@ export const workspace =
       this.changed = false;
       get('saveImg').className = 'controlsDisabled';
       this.loadedTime = Number(status.getAttribute('update'));
+      this.setSaveState('saved');
+      return;
     } else if (status && 'conflict' == status.getAttribute('value')) {
       this.showConflict(Number(status.getAttribute('update')));
     } else {
       alert(strings.SAVE_SERVER_ERROR.replace("$1", adminEmail));
     }
-    get('saveImg').src = 'images/save.gif';
-  }
+    this.setSaveState('');
+  },
+  /**
+   * The save button's icon: 'saving' (the arrow rises), 'saved' (a check,
+   * for a second) or '' (see style.css).
+   */
+  setSaveState : function(state) {
+    window.clearTimeout(this.savedTimer);
+    get('saveImg').dataset.state = state;
+    if ('saved' == state) {
+      this.savedTimer = window.setTimeout(function() { workspace.setSaveState(''); }, 1000);
+    }
+  },
+  savedTimer : 0
 };
 
 ///

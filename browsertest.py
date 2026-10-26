@@ -56,7 +56,7 @@ def check(condition, message):
 def wait_for_save(page):
     page.wait_for_function(
         "get('saveImg').className == 'controlsDisabled'"
-        " && get('saveImg').src.indexOf('saving') < 0")
+        " && get('saveImg').dataset.state != 'saving'")
 
 
 def edit_and_save(page, note_id, text):
@@ -525,7 +525,7 @@ def run_ui(browser, base, name):
         save_response.update(response)
         del dialogs[:]
         page.click('#saveImg')
-        page.wait_for_function("get('saveImg').src.indexOf('saving') < 0")
+        page.wait_for_function("get('saveImg').dataset.state != 'saving'")
         check(dialogs == [('alert', message)]
               and page.evaluate("get('saveImg').className") == 'controls'
               and page.evaluate('workspace.changed'),
@@ -556,15 +556,23 @@ def run_ui(browser, base, name):
           == 'load.py?name=%s&time=%d' % (page.evaluate('escape(myescape(workspace.name))'), newer),
           'the conflict links to the newer revision')
     page.click('#saveImg')
-    page.wait_for_function("get('saveImg').src.indexOf('saving') < 0")
+    page.wait_for_function("get('saveImg').dataset.state != 'saving'")
     check(len(saves) == 5 and page.locator('#conflict ul').count() == 1
           and page.evaluate("get('saveImg').className") == 'controls',
           'saving again still conflicts')
     save_response.update(status=200, body='<return><status value="ok" update="%d"/></return>'
                          % (newer + 1))
+    page.evaluate("""() => {
+        window.saveStates = [];
+        new MutationObserver(() => saveStates.push(get('saveImg').dataset.state))
+            .observe(get('saveImg'), {attributes: true, attributeFilter: ['data-state']});
+    }""")
     page.locator('#conflict').get_by_text(
         page.evaluate('strings.CONFLICT_SAVE_ANYWAY'), exact=True).click()
     wait_for_save(page)
+    page.wait_for_function("get('saveImg').dataset.state == ''")
+    check(page.evaluate('saveStates') == ['saving', 'saved', ''],
+          'the save icon animates, shows a check, then goes back')
     check(saves[-1].endswith('&loaded=%d' % newer) and "noteid='conflict'" not in save_bodies[-1]
           and page.evaluate('workspace.loadedTime') == newer + 1
           and not page.evaluate("'conflict' in workspace.notes"),

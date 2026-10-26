@@ -219,7 +219,13 @@ func truncate(s string) string {
 	return s
 }
 
-var rssLinkHref = regexp.MustCompile(`<a id='rsslink' href="[^"]*">`)
+// The toolbar's icons and the RSS link are inline SVG since Python's GIFs
+// (and the RSS link was a literal "%s.xml"; TestPageFeedLink checks it).
+// checkPage compares the page around them.
+var (
+	pageControls = regexp.MustCompile(`(?s)<div class='controls'>.*?\n        </div>`)
+	pageRSSLink  = regexp.MustCompile(`<a id='rsslink' href="[^"]*"[^>]*>.*?</a>`)
+)
 
 // pageValuePatterns find the values in a page: the name, notes, title,
 // loadedTime and nextNoteNum. Python's script used var and set adminEmail
@@ -239,11 +245,6 @@ var pageScripts = regexp.MustCompile(`(?s)\n    <script .*</script>\n`)
 
 var inlineHandlersSincePython = strings.NewReplacer(
 	"<body onload='loadinit();' ", "<body ",
-	` onclick="workspace.createNote()"`, "",
-	` onclick="workspace.save()"`, "",
-	` onclick="workspace.loadlist()"`, "",
-	` onclick="workspace.history.undo()"`, "",
-	` onclick="workspace.history.redo()"`, "",
 	` onchange='workspace.filter(this.value)' onkeydown='if(13==event.keyCode){workspace.filter(this.value);}; event.cancelBubble=true;'/>`, " />",
 )
 
@@ -255,10 +256,12 @@ var inlineHandlersSincePython = strings.NewReplacer(
 func checkPage(t *testing.T, c *httpCase, got, want []byte) {
 	t.Helper()
 	gotSkeleton, wantSkeleton := string(got), string(want)
-	// Fixed since Python: the template had a stray `"""`, and the RSS link
-	// was a literal "%s.xml" (TestPageFeedLink checks the link).
+	// Fixed since Python: the template had a stray `"""`.
 	wantSkeleton = strings.Replace(wantSkeleton, `type="text/css" />"""`, `type="text/css" />`, 1)
-	gotSkeleton = rssLinkHref.ReplaceAllString(gotSkeleton, `<a id='rsslink' href="%s.xml">`)
+	for _, p := range []*regexp.Regexp{pageControls, pageRSSLink} {
+		gotSkeleton = p.ReplaceAllString(gotSkeleton, "@@icons@@")
+		wantSkeleton = p.ReplaceAllString(wantSkeleton, "@@icons@@")
+	}
 	// Since Python, the page's event handlers are added by webnote.js
 	// instead of inline attributes.
 	wantSkeleton = inlineHandlersSincePython.Replace(wantSkeleton)
