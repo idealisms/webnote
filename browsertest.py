@@ -196,7 +196,7 @@ def run(browser, base, name, previous):
           'and stores this tab\'s notes, without the warning')
 
     page.dblclick('#' + note_id)
-    page.click('#%s img[src="images/close.gif"]' % note_id)
+    page.click('#%s svg.closeNote' % note_id)
     page.wait_for_function("get('saveImg').className == 'controls'")
     page.click('#saveImg')
     wait_for_save(page)
@@ -416,7 +416,7 @@ def run_ui(browser, base, name):
     # Delete with the close icon; undo brings the note back with its text.
     page.evaluate('workspace.notes[%r].setText("kept text")' % b)
     dblclick_in_front(page, b)
-    page.click('#%s img[src="images/close.gif"]' % b)
+    page.click('#%s svg.closeNote' % b)
     check(page.evaluate("!get(%r) && !get('m' + %r) && !(%r in workspace.notes)" % (b, b, b)),
           'the close icon deletes the note')
     undo(page)

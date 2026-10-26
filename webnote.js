@@ -294,11 +294,24 @@ Note.prototype.mouseDblClick = function() {
     bar.appendChild(swatch);
   }, this);
 
-  const close = document.createElement('img');
-  close.src = 'images/close.gif';
-  close.alt = strings.CLOSE_ICON_ALT;
-  close.title = strings.CLOSE_ICON_TOOLTIP;
-  close.style.cssText = 'cursor:auto;border:0;height:12px;width:12px;';
+  // A red X, drawn corner to corner and clipped square at the edges. The
+  // shadow keeps it visible on red notes.
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const close = document.createElementNS(svgNS, 'svg');
+  close.setAttribute('class', 'closeNote');
+  close.setAttribute('viewBox', '0 0 12 12');
+  close.setAttribute('width', '12');
+  close.setAttribute('height', '12');
+  close.setAttribute('role', 'img');
+  close.setAttribute('aria-label', strings.CLOSE_ICON_ALT);
+  close.style.cssText = 'cursor:auto;filter:drop-shadow(0.5px 1px 0.5px rgba(0,0,0,0.6));';
+  const tooltip = document.createElementNS(svgNS, 'title');
+  tooltip.textContent = strings.CLOSE_ICON_TOOLTIP;
+  const x = document.createElementNS(svgNS, 'path');
+  x.setAttribute('d', 'M0 0L12 12M12 0L0 12');
+  x.setAttribute('stroke', '#f00');
+  x.setAttribute('stroke-width', '2.6');
+  close.append(tooltip, x);
   close.addEventListener('click', this.destroy.bind(this, true));
   bar.appendChild(close);
 
@@ -1819,10 +1832,6 @@ export function init()
     form.append(debug, clear);
     get('db').appendChild(form);
   }
-
-  // preload the close image
-  const closeImg = new Image();
-  closeImg.src = 'images/close.gif';
 
 
   const toolbar = get('toolbar');
