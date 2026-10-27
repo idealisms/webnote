@@ -9,6 +9,7 @@ import (
 	"html"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -416,6 +417,11 @@ var fixedSincePython = map[string]fixedResponse{
 	"GET /webnote/getrecent.py%0A?name=many": {status: 404},
 	"GET /%0A":                               {status: 404},
 
+	// Numbers are ASCII digits only (Python's int() also took '_' between
+	// digits and other scripts' digits); anything else is 0, as before.
+	"GET /webnote/getdates.py?name=many&offset=1_0":       {sameAs: "GET /webnote/getdates.py?name=many&offset=0"},
+	"GET /webnote/getdates.py?name=many&offset=%EF%BC%91": {sameAs: "GET /webnote/getdates.py?name=many&offset=0"},
+
 	// A path or query value that isn't UTF-8 is read as Latin-1, which is
 	// what the native escape() writes for U+0080-U+00FF.
 	"GET /webnote/caf%E9":                           {sameAs: "GET /webnote/caf%C3%A9"},
@@ -518,6 +524,17 @@ var stringsSincePython = strings.NewReplacer(
 // badSaveSincePython reports whether a golden case is a save that Python
 // answered with a 500. Those were all bad XML or an out-of-range
 // nextNoteNum, which are now 400s that still don't write.
+// zeroNextNoteNumSincePython are saves whose nextNoteNum Python's int()
+// read but parseInt() doesn't, so it's stored as 0.
+var zeroNextNoteNumSincePython = map[string]bool{}
+
+func init() {
+	for _, n := range []string{"1_0", "\uff11", "\u0663", "\u30003"} {
+		body := "<workspace name='new' nextNoteNum='" + n + "'>\n</workspace>"
+		zeroNextNoteNumSincePython["POST /webnote/save.py "+strconv.Quote(body)] = true
+	}
+}
+
 func badSaveSincePython(c *httpCase) bool {
 	return c.Request.Method == "POST" && strings.HasPrefix(c.Request.Path, "/webnote/save.py") &&
 		c.Response.Status == 500
@@ -600,6 +617,12 @@ func TestHTTPMatchesPython(t *testing.T) {
 		t.Errorf("a read-only request wrote")
 	}
 
+	unusedZero := maps.Clone(zeroNextNoteNumSincePython)
+	defer func() {
+		for k := range unusedZero {
+			t.Errorf("zeroNextNoteNumSincePython has %q, which isn't a golden save", k)
+		}
+	}()
 	for _, c := range saves {
 		emulatorReset(t)
 		putSeed(t, ctx, client, g)
@@ -612,6 +635,13 @@ func TestHTTPMatchesPython(t *testing.T) {
 		}
 		if c.Changed == nil {
 			c.Changed = map[string]storedWorkspace{}
+		}
+		if zeroNextNoteNumSincePython[c.String()] {
+			delete(unusedZero, c.String())
+			for k, v := range c.Changed {
+				v.NextNoteNum = 0
+				c.Changed[k] = v
+			}
 		}
 		if !reflect.DeepEqual(changed, c.Changed) {
 			gotJSON, _ := json.Marshal(changed)
@@ -1129,5 +1159,21 @@ func TestParseQuery(t *testing.T) {
 		if got := parseQuery(c.raw); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("parseQuery(%q) = %q, want %q", c.raw, got, c.want)
 		}
+	}
+}
+
+func TestParseInt(t *testing.T) {
+	for _, s := range []string{"0", "10", " 3 ", "+2", "-1", "\t7\n"} {
+		if _, err := parseInt(s); err != nil {
+			t.Errorf("parseInt(%q): %v", s, err)
+		}
+	}
+	for _, s := range []string{"", "abc", "1_0", "_1", "１", "٣", "　3", "0x10", "1.5"} {
+		if n, err := parseInt(s); err == nil || errors.Is(err, strconv.ErrRange) {
+			t.Errorf("parseInt(%q) = %d, %v; want a syntax error", s, n, err)
+		}
+	}
+	if _, err := parseInt("99999999999999999999"); !errors.Is(err, strconv.ErrRange) {
+		t.Errorf("parseInt past int64: %v, want ErrRange", err)
 	}
 }

@@ -250,13 +250,14 @@ func (s *server) getDates(req *request) {
 	offset := int64(0)
 	if v, ok := req.params.lookup("offset"); !ok {
 		offset = 0
-	} else if n, ok := pyInt(v); ok {
-		// ndb rejects offsets outside a non-negative int32.
-		if !n.IsInt64() || n.Int64() < 0 || n.Int64() > math.MaxInt32 {
-			s.badRequest(req, fmt.Errorf("offset %v out of range", n))
+	} else if n, err := parseInt(v); err == nil || errors.Is(err, strconv.ErrRange) {
+		// ndb rejects offsets outside a non-negative int32. Anything else
+		// that isn't a number is 0, like before.
+		if err != nil || n < 0 || n > math.MaxInt32 {
+			s.badRequest(req, fmt.Errorf("offset %q out of range", v))
 			return
 		}
-		offset = n.Int64()
+		offset = n
 	}
 	times, err := notesTimes(req.r.Context(), s.client, ws.Key, int(offset), 11)
 	if err != nil {
@@ -436,14 +437,15 @@ func (s *server) saveHandler(req *request) {
 		s.badRequest(req, err)
 		return
 	}
-	nextNoteNum := int64(0)
-	if n, ok := pyInt(save.nextNoteNum); ok {
+	// A nextNoteNum that isn't a number is 0, like before, rather than
+	// losing the save.
+	nextNoteNum, err := parseInt(save.nextNoteNum)
+	if errors.Is(err, strconv.ErrRange) {
 		// Datastore integers are 64-bit; ndb fails the save otherwise.
-		if !n.IsInt64() {
-			s.badRequest(req, fmt.Errorf("nextNoteNum %v out of range", n))
-			return
-		}
-		nextNoteNum = n.Int64()
+		s.badRequest(req, fmt.Errorf("nextNoteNum %q out of range", save.nextNoteNum))
+		return
+	} else if err != nil {
+		nextNoteNum = 0
 	}
 	// loaded is the client's workspace.loadedTime. Clients loaded before it
 	// was sent don't check for conflicts.

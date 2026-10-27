@@ -1,14 +1,14 @@
 package main
 
 // Python string and URL functions that the handlers' behavior depends on,
-// reproduced exactly. Strings that may hold lone surrogates (from JSON) are
-// []rune.
+// reproduced exactly, except parseQuery() and parseInt(), which drop
+// webob's and int()'s quirks. Strings that may hold lone surrogates (from
+// JSON) are []rune.
 
 import (
 	"fmt"
-	"math/big"
+	"strconv"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -35,70 +35,12 @@ func pyStrip(s []rune) []rune {
 	return s[start:end]
 }
 
-func pyStripString(s string) string {
-	return strings.TrimFunc(s, pyIsSpace)
-}
-
-// pyInt is Python's int() of a string: surrounding whitespace, a sign, and
-// decimal digits of any script with single underscores between them. ok is
-// false where Python raises ValueError.
-func pyInt(s string) (n *big.Int, ok bool) {
-	s = pyStripString(s)
-	neg := false
-	if s != "" && (s[0] == '+' || s[0] == '-') {
-		neg = s[0] == '-'
-		s = s[1:]
-	}
-	n = new(big.Int)
-	ten := big.NewInt(10)
-	prevDigit := false
-	digits := 0
-	for _, r := range s {
-		if r == '_' {
-			if !prevDigit {
-				return nil, false
-			}
-			prevDigit = false
-			continue
-		}
-		d, isDigit := digitValue(r)
-		if !isDigit {
-			return nil, false
-		}
-		n.Mul(n, ten).Add(n, big.NewInt(int64(d)))
-		prevDigit = true
-		digits++
-	}
-	if digits == 0 || !prevDigit {
-		return nil, false
-	}
-	if neg {
-		n.Neg(n)
-	}
-	return n, true
-}
-
-// digitValue returns the value of a decimal digit in any script. Unicode puts
-// each script's digits 0-9 in a contiguous run, and each range in unicode.Nd
-// starts at a 0.
-func digitValue(r rune) (int, bool) {
-	if r >= '0' && r <= '9' {
-		return int(r - '0'), true
-	}
-	if !unicode.Is(unicode.Nd, r) {
-		return 0, false
-	}
-	for _, rng := range unicode.Nd.R16 {
-		if r >= rune(rng.Lo) && r <= rune(rng.Hi) {
-			return int(r-rune(rng.Lo)) % 10, true
-		}
-	}
-	for _, rng := range unicode.Nd.R32 {
-		if r >= rune(rng.Lo) && r <= rune(rng.Hi) {
-			return int(r-rune(rng.Lo)) % 10, true
-		}
-	}
-	return 0, false
+// parseInt parses a decimal integer: ASCII digits with an optional sign and
+// surrounding ASCII whitespace. The error wraps strconv.ErrRange for a
+// number past int64. (Python's int() also took '_' between digits and
+// digits of any script.)
+func parseInt(s string) (int64, error) {
+	return strconv.ParseInt(strings.Trim(s, " \t\n\v\f\r"), 10, 64)
 }
 
 func isHex(c byte) bool {
