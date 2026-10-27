@@ -2012,7 +2012,7 @@ function docMouseUp(e) {
   workspace.mouseUp(e);
 }
 
-function docKeyDown(ev) {
+export function docKeyDown(ev) {
   // the keydown event only seems to be a document event so we
   // can't put the event on the div layer.  Instead, events
   // need to be passed to the note that is being hovered over.
@@ -2039,7 +2039,7 @@ function docKeyDown(ev) {
       if (n) n.move(new Point(0, 8));
     } else if ('O' == key && ev.altKey) {
       n = workspace.notes[workspace.topId];
-      n.mouseDblClick();
+      if (n) n.mouseDblClick();
     } else if ('N' == key) {
       if (ev.altKey) {
         workspace.createNote();
@@ -2056,18 +2056,18 @@ function docKeyDown(ev) {
         + strings.BOOKMARKLET_NAME + "</a>"});
     } else { // forward to note
       n = workspace.notes[workspace.topId];
-      n.keyDown(ev);
+      if (n) n.keyDown(ev);
     }
   } else if (workspace.shortcuts) { // in edit mode
     if (27 == ev.keyCode) { // Esc
       workspace.editOff();
     } else if ('D' == key && ev.altKey) {
       n = workspace.notes[workspace.topId];
-      n.destroy(true);
+      if (n) n.destroy(true);
       ev.preventDefault();
     } else { // forward to note
       n = workspace.notes[workspace.topId];
-      n.keyDown(ev);
+      if (n) n.keyDown(ev);
     }
   }
 }

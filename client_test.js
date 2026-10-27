@@ -309,3 +309,15 @@ test('reportErrors sends each error once, at most 5, without the page URL', asyn
     listeners.unhandledrejection({reason: new Error('e' + i)});
   assert.equal(beacons.length, 5, 'at most 5 per page');
 });
+
+test('docKeyDown: keys with no note on top are ignored', async () => {
+  const {workspace, docKeyDown} = await load();
+  assert.equal(workspace.topId, '');
+  const key = (keyCode, altKey = false) =>
+    docKeyDown({keyCode, altKey, preventDefault() {}});
+  key(65);                // forwarded to the note
+  key(79, true);          // Alt+O edits it
+  workspace.edit = true;
+  key(65);                // forwarded to the note
+  key(68, true);          // Alt+D deletes it
+});
