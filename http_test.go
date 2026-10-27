@@ -403,6 +403,11 @@ var fixedSincePython = map[string]fixedResponse{
 	"HEAD /webnote/rss.xml":              {sameAs: "GET /webnote/rss.xml"},
 	"HEAD /webnote/load.py?name=x":       {status: 200},
 
+	// Only '&' separates query pairs, and only '%' with two hex digits is
+	// an escape (webob also split on ';' and read "%2" as byte 2).
+	"GET /webnote/load.py?name=a;b": {status: 200, contains: "<title> a;b</title>"},
+	"GET /webnote/load.py?name=a%2": {status: 200, contains: "<title> a%2</title>"},
+
 	// A path or query value that isn't UTF-8 is read as Latin-1, which is
 	// what the native escape() writes for U+0080-U+00FF.
 	"GET /webnote/caf%E9":                           {sameAs: "GET /webnote/caf%C3%A9"},
@@ -1095,5 +1100,26 @@ func TestHeadServedLikeGet(t *testing.T) {
 	newTestServer(client, at).ServeHTTP(rec, httptest.NewRequest("HEAD", "/webnote/save.py", nil))
 	if rec.Code != 405 || rec.Header().Get("Allow") != "POST" {
 		t.Errorf("HEAD save.py: %d, Allow %q", rec.Code, rec.Header().Get("Allow"))
+	}
+}
+
+func TestParseQuery(t *testing.T) {
+	for _, c := range []struct {
+		raw  string
+		want queryParams
+	}{
+		{"name=a&epoch=1", queryParams{{"name", "a"}, {"epoch", "1"}}},
+		{"name=a;b", queryParams{{"name", "a;b"}}},             // ';' isn't a separator
+		{"name=a+b%2Bc", queryParams{{"name", "a b+c"}}},       // '+' is a space
+		{"name=a%2", queryParams{{"name", "a%2"}}},             // one hex digit stays
+		{"name=%u5D9%2541", queryParams{{"name", "%u5D9%41"}}}, // old %u links
+		{"name=%zz%%41", queryParams{{"name", "%zz%A"}}},       // invalid escapes stay
+		{"name=caf%E9", queryParams{{"name", "café"}}},         // Latin-1 fallback
+		{"name&&x=", queryParams{{"name", ""}, {"x", ""}}},     // empty pairs skipped
+		{"a=b=c", queryParams{{"a", "b=c"}}},
+	} {
+		if got := parseQuery(c.raw); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("parseQuery(%q) = %q, want %q", c.raw, got, c.want)
+		}
 	}
 }

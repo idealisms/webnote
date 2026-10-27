@@ -211,25 +211,25 @@ func pyQuote(s string) string {
 	return b.String()
 }
 
-// queryParams is webob's parsing of the query string (parse_qsl_text in
-// webob.compat): '+' is a space, '&' and ';' separate pairs, a name without
-// '=' has an empty value. Unlike webob, which fails on a name or value that
-// isn't UTF-8 after its unquote(), such a name or value is read as Latin-1:
-// that's what the native escape() means by %E9.
+// queryParams is the parsed query string: '&' separates pairs, '+' is a
+// space, and a name without '=' has an empty value. Only '%' and two hex
+// digits is an escape; any other '%' stays, so old links with %u escapes
+// still work. A name or value that isn't UTF-8 is read as Latin-1: that's
+// what the native escape() means by %E9. (webob also split on ';' and read
+// "%2" as byte 2.)
 type queryParams []struct{ name, value string }
 
 func parseQuery(raw string) queryParams {
 	var params queryParams
 	raw = strings.ReplaceAll(raw, "+", " ")
-	for _, s1 := range strings.Split(raw, "&") {
-		for _, pair := range strings.Split(s1, ";") {
-			if pair == "" {
-				continue
-			}
-			name, value, _ := strings.Cut(pair, "=")
-			n, v := utf8OrLatin1(webobUnquote(name)), utf8OrLatin1(webobUnquote(value))
-			params = append(params, struct{ name, value string }{n, v})
+	for _, pair := range strings.Split(raw, "&") {
+		if pair == "" {
+			continue
 		}
+		name, value, _ := strings.Cut(pair, "=")
+		n := utf8OrLatin1(string(percentDecode([]byte(name))))
+		v := utf8OrLatin1(string(percentDecode([]byte(value))))
+		params = append(params, struct{ name, value string }{n, v})
 	}
 	return params
 }
@@ -248,54 +248,6 @@ func (p queryParams) lookup(name string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-// webobUnquote is webob.compat.unquote(): after each '%', up to two
-// characters are read with Python's int(s, 16), so "%2" is byte 2 and
-// "% 2" (from "%+2") is too. Otherwise the '%' stays.
-func webobUnquote(s string) string {
-	parts := strings.Split(s, "%")
-	var b strings.Builder
-	b.WriteString(parts[0])
-	for _, item := range parts[1:] {
-		head := item
-		if len(head) > 2 {
-			head = head[:2]
-		}
-		if v, ok := pyIntBase16Byte(head); ok {
-			b.WriteByte(v)
-			b.WriteString(item[len(head):])
-		} else {
-			b.WriteString("%" + item)
-		}
-	}
-	return b.String()
-}
-
-// pyIntBase16Byte is bytes([int(s, 16)]) for a string of at most two bytes:
-// ASCII whitespace around, an optional sign, hex digits, and a result that
-// fits in a byte.
-func pyIntBase16Byte(s string) (byte, bool) {
-	s = strings.Trim(s, " \t\n\v\f\r")
-	neg := false
-	if s != "" && (s[0] == '+' || s[0] == '-') {
-		neg = s[0] == '-'
-		s = s[1:]
-	}
-	if s == "" {
-		return 0, false
-	}
-	v := 0
-	for i := 0; i < len(s); i++ {
-		if !isHex(s[i]) {
-			return 0, false
-		}
-		v = v*16 + int(unhex(s[i]))
-	}
-	if neg && v != 0 {
-		return 0, false
-	}
-	return byte(v), true
 }
 
 // utf8OrLatin1 returns s if it's valid UTF-8, and otherwise s decoded as
