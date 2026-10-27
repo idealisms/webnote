@@ -28,18 +28,22 @@ func TestCanonicalWsNameExamples(t *testing.T) {
 		// Firefox (native escape) leaves @*+-./ unescaped.
 		{"my-notes", "my%2Dnotes"},
 		{"a.b/c@d*e+f", "a%2Eb%2Fc%40d%2Ae%2Bf"},
-		// Firefox pads %u escapes for U+0100-U+0FFF to 4 digits.
-		{"%u05D9%u05D5", "%u5D9%u5D5"},
-		{"%u0100", "%u100"},
+		{"%u05D9%u05D5", "%u05D9%u05D5"},
+		{"%u0100", "%u0100"},
+		// Before 2026-10-26, myescape() didn't pad %u escapes for
+		// U+0100-U+0FFF. A hex digit after one makes it a 4-digit escape.
+		{"%u5D9%u5D5", "%u05D9%u05D5"},
+		{"%u100x", "%u0100x"},
+		{"%u5D9A", "%u5D9A"},
+		{"%25u5D9", "%25u5D9"},
 		// Raw characters are escaped the way myescape() does.
 		{"a b", "a%20b"},
 		{"Bogotá", "Bogot%E1"},
-		{"י", "%u5D9"},
+		{"י", "%u05D9"},
 		{"♥", "%u2665"},
 		{"\U0001d400", "%uD835%uDC00"}, // UTF-16 surrogate pair
 		// Already canonical.
 		{"my%2Dnotes", "my%2Dnotes"},
-		{"%u5D9", "%u5D9"},
 		{"", ""},
 	}
 	for _, c := range cases {
@@ -144,7 +148,7 @@ func storedNames(t *testing.T) []struct{ Key, Name string } {
 // Every stored name is canonical, keyed by its SHA-1, and made of
 // myescape() output: letters, digits, '_' and escapes.
 func TestStoredNames(t *testing.T) {
-	escaped := regexp.MustCompile(`^([A-Za-z0-9_]|%[0-9A-F]{2}|%u[0-9A-F]{3,4})*$`)
+	escaped := regexp.MustCompile(`^([A-Za-z0-9_]|%[0-9A-F]{2}|%u[0-9A-F]{4})*$`)
 	names := storedNames(t)
 	for i, w := range names {
 		if canonicalWsName(w.Name) != w.Name {
@@ -160,15 +164,9 @@ func TestStoredNames(t *testing.T) {
 	t.Logf("checked %d names", len(names))
 }
 
-// storedUnpaddedU matches myescape()'s unpadded escapes of U+0100-U+0FFF (%u5D9),
-// which the native unescape() can't decode, so these names don't survive
-// the page's unescape() and the next save's myescape(). Known and
-// pre-existing; see canonicalWsName().
-var storedUnpaddedU = regexp.MustCompile(`%u[0-9A-F]{3}([^0-9A-F]|$)`)
-
 // The page shows unescape(name), and the next save sends myescape() of the
-// shown name. That gives back the stored name, except for the known
-// unpadded %u names.
+// shown name. That gives back the stored name. (Names with unpadded %u
+// escapes from myescape() before 2026-10-26 wouldn't; none were stored.)
 func TestStoredNamesBrowserRoundTrip(t *testing.T) {
 	stored := storedNames(t)
 	names := make([]string, len(stored))
@@ -187,16 +185,12 @@ func TestStoredNamesBrowserRoundTrip(t *testing.T) {
 	if len(resaved) != len(names) {
 		t.Fatalf("node returned %d names for %d", len(resaved), len(names))
 	}
-	changed := 0
 	for i, n := range names {
 		if resaved[i] != n {
-			changed++
-			if !storedUnpaddedU.MatchString(n) {
-				t.Errorf("line %d: name changes across a save", i+1)
-			}
+			t.Errorf("line %d: name changes across a save", i+1)
 		}
 	}
-	t.Logf("%d names round-trip; %d known unpadded %%u names don't", len(names)-changed, changed)
+	t.Logf("%d names round-trip", len(names))
 }
 
 // The client builds workspace URLs as escape(escape(storedName)). Stored

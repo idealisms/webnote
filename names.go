@@ -9,7 +9,21 @@ import (
 	"unicode/utf16"
 )
 
-var unpaddedU = regexp.MustCompile(`%u0([0-9A-Fa-f]{3})`)
+// uEscape matches a %u escape with 3 or 4 hex digits. A fourth hex digit is
+// always read as part of the escape, as unescape() does.
+var uEscape = regexp.MustCompile(`%u[0-9A-Fa-f]{3,4}`)
+
+// padUEscapes pads %u escapes with 3 hex digits to 4 (%u5D9 -> %u05D9), so
+// that unescape() decodes them. Before 2026-10-26, myescape() in objects.js
+// didn't pad them, so old tabs and links still send them.
+func padUEscapes(name string) string {
+	return uEscape.ReplaceAllStringFunc(name, func(m string) string {
+		if len(m) == 5 {
+			return "%u0" + m[2:]
+		}
+		return m
+	})
+}
 
 // isMyescapeSafe reports whether myescape() in objects.js leaves r unescaped.
 func isMyescapeSafe(r rune) bool {
@@ -24,11 +38,11 @@ func isMyescapeSafe(r rune) bool {
 func myescapeRune(r rune) string {
 	var b strings.Builder
 	for _, unit := range utf16.Encode([]rune{r}) {
-		hex := fmt.Sprintf("%02X", unit)
-		if len(hex) > 2 {
-			hex = "u" + hex
+		if unit > 0xFF {
+			fmt.Fprintf(&b, "%%u%04X", unit)
+		} else {
+			fmt.Fprintf(&b, "%%%02X", unit)
 		}
-		b.WriteString("%" + hex)
 	}
 	return b.String()
 }
@@ -42,8 +56,11 @@ func myescapeRune(r rune) string {
 // any of those forms (or an unescaped name) to the myescape() form:
 //   - Native escape() leaves @*+-./ unescaped; myescape() escapes them
 //     (e.g. '-' -> '%2D').
-//   - Native escape() pads %u escapes to 4 hex digits; myescape() doesn't
-//     (e.g. '%u05D9' -> '%u5D9').
+//   - myescape() didn't pad %u escapes to 4 hex digits before 2026-10-26;
+//     they're padded now, like native escape() ('%u5D9' -> '%u05D9'). No
+//     stored name had one. An unpadded escape followed by a hex digit
+//     ('%u5D9A' for U+05D9 'A') can't be told from a 4-digit one; it's read
+//     as U+5D9A.
 //   - Any other character myescape() would escape (e.g. a raw 'á' from a URL
 //     typed by hand) is escaped ('á' -> '%E1').
 //
@@ -58,7 +75,7 @@ func canonicalWsName(name string) string {
 			b.WriteString(myescapeRune(r))
 		}
 	}
-	return unpaddedU.ReplaceAllString(b.String(), "%u$1")
+	return padUEscapes(b.String())
 }
 
 // workspaceKeyID returns the key name of a workspace's Workspace entity: the

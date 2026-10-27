@@ -79,6 +79,21 @@ func readHTTPGolden(t *testing.T) *httpGolden {
 	if err := json.Unmarshal(data, &g); err != nil {
 		t.Fatal(err)
 	}
+	// The seed has a name with an unpadded %u escape (%u5D9), which
+	// canonicalWsName() pads since 2026-10-26. No stored name had one, so
+	// store it the way it would be stored now.
+	for i := range g.Seed.Workspaces {
+		w := &g.Seed.Workspaces[i]
+		if name := canonicalWsName(w.Name); name != w.Name {
+			oldKey := w.Key
+			w.Name, w.Key = name, workspaceKeyID(name)
+			for j := range g.Seed.Notes {
+				if g.Seed.Notes[j].Workspace == oldKey {
+					g.Seed.Notes[j].Workspace = w.Key
+				}
+			}
+		}
+	}
 	return &g
 }
 
@@ -393,6 +408,10 @@ var fixedSincePython = map[string]fixedResponse{
 	"GET /webnote/getrecent.py?name=Bogot%E1":       {status: 200, contains: "2017-12-30 19:00:00"},
 	"GET /webnote/getdates.py?name=Bogot%E1":        {status: 200},
 	"GET /webnote/getdates.py?name=many&offset=%E1": {sameAs: "GET /webnote/getdates.py?name=many&offset=abc"},
+
+	// An unpadded %u escape (old myescape() output) is padded for the page's
+	// unescape(), which can't decode it.
+	"GET /webnote/%2525u5D9": {status: 200, contains: "setName(unescape('%u05D9'))"},
 
 	// A time on a day pytz couldn't handle falls back to the latest
 	// revision, like a bad time.

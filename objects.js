@@ -334,6 +334,9 @@ function isEsc(s)
  * In reality, I should be using encodeURIComponent for everything, but
  * since information in the db is already in this form, we'll keep it
  * in this form.
+ * Like the native escape(), %u escapes have 4 hex digits, so unescape()
+ * decodes them. Until 2026-10-26 they weren't padded (%u5D9 for U+05D9),
+ * which unescape() can't decode; the server pads old names it receives.
  */
 export function myescape(s)
 {
@@ -344,7 +347,7 @@ export function myescape(s)
     {
       let hex = dec2hex(s.charCodeAt(i)).toUpperCase();
       if (hex.length > 2)
-        hex = 'u' + hex;
+        hex = 'u' + hex.padStart(4, '0');
       ret += '%' + hex;
     }
     else

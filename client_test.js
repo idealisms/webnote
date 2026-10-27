@@ -73,8 +73,9 @@ test('myescape', async () => {
   assert.equal(myescape('aZ09_'), 'aZ09_');
   assert.equal(myescape('my-notes.txt'), 'my%2Dnotes%2Etxt');
   assert.equal(myescape('Bogotá café'), 'Bogot%E1%20caf%E9');
-  // Unpadded %u escapes, and an astral character is two of them.
-  assert.equal(myescape('י日\u{1f600}'), '%u5D9%u65E5%uD83D%uDE00');
+  // %u escapes have 4 digits, and an astral character is two of them.
+  assert.equal(myescape('ā י日\u{1f600}'), '%u0101%20%u05D9%u65E5%uD83D%uDE00');
+  assert.equal(unescape(myescape('ā י日\u{1f600}')), 'ā י日\u{1f600}');
 });
 
 test('Color parses and prints', async () => {

@@ -305,7 +305,9 @@ func (s *server) load(req *request, pathName string, fromPath bool) {
 		return
 	}
 	values := pageValues{
-		NameJS:     jsStringEscape(name),
+		// Old links can have unpadded %u escapes, which unescape() can't
+		// decode.
+		NameJS:     jsStringEscape(padUEscapes(name)),
 		NameHTML:   html.EscapeString(name),
 		FeedURL:    html.EscapeString("/webnote/" + pyQuote(pyQuote(canonicalWsName(name))) + ".xml"),
 		NotesJS:    "[]",

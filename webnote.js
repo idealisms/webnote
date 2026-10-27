@@ -507,8 +507,8 @@ Note.prototype.toXML = function()
   ret += " height='" + this.getSize().y + "'";
   ret += " width='" + this.getSize().x + "'";
   ret += " zindex='" + get(this.id).style.zIndex + "'";
-  // Use the native escape() for text: unescape() can't decode myescape()'s
-  // unpadded %u escapes (e.g. %u5D9).
+  // Use the native escape() for text: it's the stored format (myescape()
+  // escapes more characters, and didn't pad %u escapes before 2026-10-26).
   ret += ">\n" + escape(this.text) + "\n";
   return ret + "</note>"
 }
