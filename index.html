@@ -1,183 +1,392 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Webnote: sticky notes in your browser</title>
+<meta name="description" content="Webnote is a free online workspace of sticky notes. Jot things down, lay out ideas on one screen, and open them from any computer by name.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="webnote_favicon.ico" sizes="32x32">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="icons/manifest.webmanifest">
+<style>
+:root {
+  --bg: #f7f6f3;
+  --text: #2c2c2a;
+  --muted: #6b6a66;
+  --line: #dcd9d2;
+  --field: #ffffff;
+  --accent: #4d6b78;
+  --accent-text: #ffffff;
+  --code: #ecebe6;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1d1e20;
+    --text: #e3e1dc;
+    --muted: #a09e98;
+    --line: #3a3b3e;
+    --field: #26272a;
+    --accent: #8fb0bf;
+    --accent-text: #1d1e20;
+    --code: #2c2d30;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main, footer {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+main { padding-top: 3rem; }
+h1 {
+  margin: 0;
+  font-size: 2.2rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.tagline {
+  margin: 0.25rem 0 2rem;
+  color: var(--muted);
+  font-size: 1.15rem;
+}
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+.open {
+  display: flex;
+  gap: 0.5rem;
+}
+#name {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  color: inherit;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+#openButton {
+  padding: 0.55rem 1.2rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-text);
+  background: var(--accent);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.hint {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+#recent { margin-top: 2rem; }
+#recent h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+#recent ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+#recent li {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--line);
+}
+#recent li a {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#recent button {
+  padding: 0.1rem 0.5rem;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#recent button:hover { color: var(--text); }
+.sections { margin-top: 2.5rem; border-top: 1px solid var(--line); }
+details { border-bottom: 1px solid var(--line); }
+summary {
+  padding: 0.8rem 0;
+  font-weight: 600;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+details > div { padding-bottom: 1rem; }
+details h3 { margin: 1.2rem 0 0.3rem; font-size: 1rem; }
+details ul { padding-left: 1.2rem; }
+details li { margin: 0.2rem 0; }
+img, video {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+kbd, code {
+  padding: 0.05rem 0.3rem;
+  font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--code);
+  border-radius: 4px;
+}
+footer {
+  margin-top: 3rem;
+  padding-bottom: 2rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+footer p {
+  margin: 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+</style>
+<script type="module">
+// ?v=2: the objects.js?module that browsers may have cached has no
+// recent-workspace functions.
+import {forgetWorkspace, myescape, recentWorkspaces} from './objects.js?v=2';
 
-<head profile="http://gmpg.org/xfn/11">
-	<title>Webnote - an online tool for taking notes</title>
-	
-	<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-
-	<style type="text/css" media="screen">
-		@import url( wp-layout.css );
-	</style>
-
-  <link rel="icon" href="webnote_favicon.ico" sizes="32x32" />
-  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="manifest" href="icons/manifest.webmanifest" />
-    <script type="module">
-// ?module: browsers may still have the classic objects.js cached at its
-// plain URL, which has no exports.
-import {myescape} from './objects.js?module';
-
-function open(name)
-{
-  // Workspace names are stored in myescape() form (see objects.js).
-  name = escape(escape(myescape(name)));
-  if (0 == name.length)
-    return;
-
-  document.location.href = "/webnote/" + name;
+// Workspace names are stored in myescape() form (see objects.js).
+function workspaceURL(name) {
+  return '/webnote/' + escape(escape(myescape(name)));
 }
 
-const fakeName = document.getElementById('fakeName');
-document.getElementById('loadForm').addEventListener('submit', function(ev) {
+const name = document.getElementById('name');
+document.getElementById('openForm').addEventListener('submit', function(ev) {
   ev.preventDefault();
-  open(fakeName.value);
+  if (name.value)
+    location.href = workspaceURL(name.value);
 });
-document.getElementById('loadButton').addEventListener('click', function() {
-  open(fakeName.value);
-});
-document.getElementById('sampleButton').addEventListener('click', function() {
-  open('Sample Workspace');
-});
-fakeName.focus();
-    </script>
+for (const a of document.querySelectorAll('a[data-workspace]'))
+  a.href = workspaceURL(a.dataset.workspace);
+
+function showRecent() {
+  const names = recentWorkspaces();
+  const list = document.querySelector('#recent ul');
+  list.replaceChildren();
+  for (const n of names) {
+    const a = document.createElement('a');
+    a.href = workspaceURL(n);
+    a.textContent = n;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = '×';
+    remove.title = 'Remove from this list';
+    remove.setAttribute('aria-label', 'Remove ' + n + ' from this list');
+    remove.addEventListener('click', function() {
+      forgetWorkspace(n);
+      showRecent();
+      name.focus();
+    });
+    const li = document.createElement('li');
+    li.append(a, remove);
+    list.append(li);
+  }
+  document.getElementById('recent').hidden = names.length == 0;
+}
+showRecent();
+// Coming back with the Back button can show a cached page.
+window.addEventListener('pageshow', showRecent);
+
+// /webnote/#tips opens that section.
+function openFromHash() {
+  const section = location.hash && document.getElementById(location.hash.slice(1));
+  if (section && section.tagName == 'DETAILS') {
+    section.open = true;
+    section.scrollIntoView();
+  }
+}
+openFromHash();
+window.addEventListener('hashchange', openFromHash);
+
+// Respect reduced motion: don't autoplay the screencast.
+const video = document.querySelector('video');
+if (video && matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  video.removeAttribute('autoplay');
+  video.controls = true;
+}
+</script>
 </head>
-
 <body>
-  <div class="tnote" style="margin: 30px 15% 10px 15%;">
+<main>
+  <h1>Webnote</h1>
+  <p class="tagline">Sticky notes in your browser.</p>
 
+  <form id="openForm">
+    <label for="name">Workspace name</label>
+    <div class="open">
+      <input id="name" autofocus autocomplete="off" spellcheck="false">
+      <button id="openButton">Open</button>
+    </div>
+    <p class="hint">A new name creates a new workspace. Anyone who knows the
+    name can open and edit it.
+    Or <a data-workspace="Sample Workspace" href="#">try the sample workspace</a>.</p>
+  </form>
 
-<h2>Webnote <sup style='color:red; font-size: 60%;'>new!</sup></h2>
+  <section id="recent" hidden>
+    <h2>Recently opened in this browser</h2>
+    <ul></ul>
+  </section>
 
+  <div class="sections">
+    <details id="about">
+      <summary>What is Webnote?</summary>
+      <div>
+        <p>Webnote is a page of sticky notes. Use it to jot something down in
+        a meeting or class, keep a to-do list, or lay out ideas on one screen
+        where you can see them all at once.</p>
+        <img src="images/landing-workspace.webp" width="960" height="540"
+             alt="A Webnote workspace: several colored notes with lists and short text, and a toolbar at the top" loading="lazy">
+        <p>Each workspace has a name. Open it from any computer by name, or
+        send the link to someone to share it. There's no account to make.</p>
+        <p>Why not a wiki? A wiki is good for lots of linked text. Webnote is
+        for arranging a handful of notes visually, on one page.</p>
+      </div>
+    </details>
 
-<div style="width:180px;float:right;margin:10px -40px 10px 10px;padding:4px;">
+    <details id="using">
+      <summary>Using a workspace</summary>
+      <div>
+        <video src="images/landing-new-note.webm" width="960" height="540"
+               autoplay muted loop playsinline preload="metadata"
+               aria-label="Creating a note, typing in it, and moving it"></video>
+        <ul>
+          <li><strong>New note:</strong> the <em>+</em> button in the toolbar.</li>
+          <li><strong>Edit:</strong> double-click a note. Click outside it or press
+          <kbd>Esc</kbd> when you're done.</li>
+          <li><strong>Move:</strong> drag a note. <strong>Resize:</strong> drag its edge.</li>
+          <li><strong>Color:</strong> hover over a note and press <kbd>1</kbd> to
+          <kbd>8</kbd>.</li>
+          <li><strong>Delete:</strong> the <em>&times;</em> in a note's corner.</li>
+          <li><strong>Save:</strong> the cloud button. Nothing is saved until you
+          press it; the page warns you if you try to leave with unsaved changes.</li>
+          <li><strong>Undo and redo:</strong> the arrow buttons.</li>
+          <li><strong>History:</strong> the clock button lists earlier saves; pick
+          one to open it.</li>
+        </ul>
+        <p>Workspaces need a mouse or trackpad; touch screens aren't
+        supported yet.</p>
+      </div>
+    </details>
 
-  <div class="tnote">
-                <h3>Create or Load a Workspace</h3>
-                <form id="loadForm">
-                <p style="text-align: center;">
-                    <input id="fakeName" size="14"/>
-                    <input id="loadButton" type="button" value="load"/>
+    <details id="tips">
+      <summary>Tips and shortcuts</summary>
+      <div>
+        <h3>Keyboard (when you're not editing a note)</h3>
+        <ul>
+          <li><kbd>1</kbd>&ndash;<kbd>8</kbd>: color the note under the mouse.</li>
+          <li><kbd>N</kbd> / <kbd>P</kbd>: bring the next or previous note to the front.</li>
+          <li>Arrow keys: move the front note.</li>
+          <li><kbd>Alt</kbd>+<kbd>P</kbd>: new note, ready to type in.
+          <kbd>Alt</kbd>+<kbd>O</kbd>: edit the front note.
+          <kbd>Alt</kbd>+<kbd>S</kbd>: save.</li>
+          <li>While editing: <kbd>Esc</kbd> stops editing,
+          <kbd>Alt</kbd>+<kbd>D</kbd> deletes the note.</li>
+          <li><kbd>B</kbd>: adds a note with a bookmarklet. Drag its link to your
+          bookmarks bar, then select text on any page and click the bookmark
+          to add it to this workspace as a note.</li>
+        </ul>
+        <h3>Mouse</h3>
+        <ul>
+          <li><kbd>Alt</kbd>+drag: resize a note from anywhere on it.</li>
+          <li><kbd>Ctrl</kbd>+drag: move all the notes of that color together.</li>
+          <li><kbd>Alt</kbd>+right-click: send a note to the back.</li>
+          <li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+drag: select text in a note instead of moving it.</li>
+          <li>The small squares in the toolbar stand for your notes. Click one to bring
+          its note to the front, <kbd>Ctrl</kbd>+click to bring all notes of
+          that color forward, or <kbd>Shift</kbd>+click to show only that color.</li>
+        </ul>
+        <h3>Text and filtering</h3>
+        <ul>
+          <li>Start a line with <code>!</code>, <code>!!</code> or <code>!!!</code>
+          for a small, medium or large heading.</li>
+          <li>Web addresses become links.</li>
+          <li>The filter box at the top right takes a regular expression, like
+          <code>todo|later</code>, or a color, like <code>color:yellow</code>.
+          Matching notes come forward and the rest fade.</li>
+        </ul>
+      </div>
+    </details>
 
-                </p>
-                </form>
-                <p style="text-align: left; font-size: 0.8em;">If you enter a name of a
-                workspace that does not exist, it will automatically be created
-                for you.</p>
+    <details id="saving">
+      <summary>Saving, history and feeds</summary>
+      <div>
+        <p>Every save keeps a snapshot of the whole workspace, and the clock
+        button lists them so you can open an older one.</p>
+        <p><strong>Snapshots are deleted two years after they're saved.</strong>
+        Save a workspace at least once every two years to keep it.</p>
+        <p>Each workspace has an RSS feed of its notes: the feed button in the
+        toolbar, or <code>/webnote/NAME.xml</code>.</p>
+      </div>
+    </details>
+
+    <details id="privacy">
+      <summary>Privacy and sharing</summary>
+      <div>
+        <p>There are no accounts or passwords. A workspace's name is its only
+        key, so <strong>anyone who knows or guesses the name can read and
+        change it</strong>. Treat every workspace as public.</p>
+        <ul>
+          <li>Pick a long, hard-to-guess name for anything you'd rather keep to
+          yourself, and share the link only with people you trust.</li>
+          <li>Don't put passwords, financial details or anything else sensitive
+          in a note.</li>
+          <li>If someone changes your notes, the history still has your earlier
+          saves.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details id="questions">
+      <summary>Questions</summary>
+      <div>
+        <h3>Which browsers work?</h3>
+        <p>Current versions of Chrome, Edge, Firefox and Safari on a computer.</p>
+        <h3>Does it cost anything?</h3>
+        <p>No. Use it for anything legal.</p>
+        <h3>Can I run my own copy?</h3>
+        <p>Yes. The <a href="https://github.com/idealisms/webnote">source is on
+        GitHub</a>, and it runs on Google App Engine.</p>
+        <h3>I found a bug.</h3>
+        <p>Please <a href="https://github.com/idealisms/webnote/issues">open an
+        issue on GitHub</a> or email
+        <a href="mailto:webnote@ponderer.org">webnote@ponderer.org</a>.</p>
+      </div>
+    </details>
   </div>
-  <div class="tnote" style="margin-top:20px;">
-                <h3>Explore</h3>
-                <p style="text-align: justify;">
-                If you want to just see the features of webnote, feel free
-                to explore the sample workspace.</p>
-
-                <p style="text-align: center">
-                <input id="sampleButton" type="button" value="Load Sample"/>
-                </p>
-  </div>
-  <div class="tnote" style="margin-top:20px;">
-    <ul style="margin: 0;padding-left: 15px;">
-                    <li><a href="FAQ.html"><acronym title="frequently asked questions">FAQ</acronym></a></li>
-                    <li><a href="hints.html">hints</a></li>
-
-                    <li><a href="mailto:tony@ponderer.org">contact me</a></li>
-                    <li><a href="https://github.com/idealisms/webnote">source code</a></li>
-    </ul>
-  </div>
-</div>
-
-
-        <p style="text-align: justify;">
-            Webnote is a tool for taking notes on your computer.  It allows
-            you to quickly write something down during a meeting, class, or
-            any other time that you have a <span title="IE 5.5, 6, Mozilla/Firefox, Safari and Opera should work" style="border-bottom: 1px #000 dotted;">web browser</span>
-            available.
-        </p>
-        <p style="text-align: justify;">
-            You start by creating a workspace and creating notes in the
-            workspace.  You can save your workspace at any time and return
-            to them from the same computer or any other computer.  You can
-            also share your notes with others by providing the workspace
-            name (or url) to a friend.
-        </p>
-
-<h3 style="text-align: left; margin: 0;">News</h3>
-
-      <div class="post"><span class="storytitle">new host!</span><br/>
-      <span class="meta"> posted by tony @ Nov 12, 2017, 10:23 pm </span><br/>
-	
-      	<p>I'm in the process of migrating the website to a new hosting provider. If you want to try it out (you
-      	can think of it as a beta release), please save your notes, then load them from
-      	<a href="https://test.aypwip.org/webnote/">https://test.aypwip.org/webnote/</a>. The new host should provide
-      	additional security.  Let me know if you find any bugs by sending me an
-      	<a href="mailto:tony@ponderer.org">email</a>.</p>
-      	
-      </div>
-
-      <div class="post"><span class="storytitle" id="post-26">the server is melting</span>
-<br/>
-      <span class="meta"> posted by tony @ June 16, 2007, 3:00 pm </span><br/>
-	
-      	<p>Please don&#8217;t embed your webnote page in an iframe or a frame if you&#8217;re going to be sending thousands of users a day.  Thanks.
-</p>
-      	
-      </div>
-
-      <div class="post"><span class="storytitle" id="post-25">database update</span>
-<br/>
-      <span class="meta"> posted by tony @ December 24, 2006, 5:49 pm </span><br/>
-	
-      	<p>I&#8217;ve made a change to how the database of the site works.  It&#8217;s been split into lots of little tables which should mean slightly faster page loads.  It also makes it easier for me to backup the sites.</p>
-	<p>Anyway, this shouldn&#8217;t cause any noticeable changes.  If anything seems broken, let me know via email.</p>
-	<p><strong>Update</strong>: This change has made workspace names <em>case sensitive</em>.  Previously, the workspace name &#8220;sample workspace&#8221; would load the same workspace as &#8220;Sample Workspace&#8221;.  Now, you need to match the case used when you first saved the workspace.  If you&#8217;re having a hard time figuring out the right case, email me with the workspace name and I&#8217;ll look it up.
-</p>
-      	
-      </div>
-
-
-
-      <div class="post"><span class="storytitle" id="post-24">scrollbars</span>
-<br/>
-      <span class="meta"> posted by tony @ February 10, 2006, 12:39 am </span><br/>
-	
-      	<p>Two new features:</p>
-	<p>1) Click and drag on the workspace to move around<br/>
-2) Notes now have scrollbars if the content exceeds the size of the note</p>
-	<p>You may need to reload to see the changes.</p>
-	<p><a href="mailto:tony@ponderer.org">Email me</a> if you have any problems.
-</p>
-      	
-      </div>
-
-
-
-      <div class="post"><span class="storytitle" id="post-23">crash</span>
-<br/>
-      <span class="meta"> posted by tony @ November 14, 2005, 6:45 pm </span><br/>
-	
-      	<p>An unrelated service on the same server as Webnote caused the database to crash.  It should be back up now.  If anything seems out of place (notes missing or something), feel free to send an email to me at tony@ponderer.org
-</p>
-      	
-      </div>
-
-
-
-      <div class="post"><span class="storytitle" id="post-22">downtime</span>
-<br/>
-      <span class="meta"> posted by tony @ August 30, 2005, 10:35 pm </span><br/>
-	
-      	<p>The web server was down a bit over the past couple of days.  Our hosting provider has been trying to diagnose the cause of the problem and they think it&#8217;s a hardware problem. They have replaced the power supply and the motherboard in hopes preventing future crashes.</p>
-	<p>Also, I&#8217;m making an extra backup of the database right now on to another computer, so rest assured, your notes are all being backed up and won&#8217;t be lost.
-</p>
-      	
-      </div>
-
-
-
-
-
-</div>
-
+</main>
+<footer>
+  <p><a href="mailto:webnote@ponderer.org">webnote@ponderer.org</a> &middot;
+  <a href="https://github.com/idealisms/webnote">Source on GitHub</a> &middot;
+  <a href="https://github.com/idealisms/webnote/issues">Report a bug</a></p>
+</footer>
 </body>
 </html>

@@ -8,7 +8,7 @@
  * the notes or undo-ing/redo-ing an action.
  */
 
-import {Color, MyDate, Point, db, findRelativeMousePos, get, myescape} from './objects.js';
+import {Color, MyDate, Point, db, findRelativeMousePos, get, myescape, rememberWorkspace} from './objects.js';
 
 // global variables
 // user options
@@ -1400,6 +1400,7 @@ export const workspace =
   setName : function(n)
   {
     this.name = n;
+    rememberWorkspace(n);
     get('wsname').textContent = this.name;
     // The page's <title> has the name as the URL had it, which for links
     // from the client is in myescape() form.

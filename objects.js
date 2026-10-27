@@ -355,3 +355,42 @@ export function myescape(s)
   }
   return ret;
 }
+
+// The workspaces recently opened in this browser, newest first, for the
+// home page. They're kept in localStorage only, so they never leave the
+// browser. Storage can be unavailable (a private window, blocked site data),
+// so every access may fail, which leaves the list empty.
+const recentKey = 'webnote.recent';
+const maxRecent = 8;
+
+export function recentWorkspaces()
+{
+  try {
+    const names = JSON.parse(localStorage.getItem(recentKey));
+    return Array.isArray(names) ? names.filter(n => typeof n == 'string') : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveRecent(names)
+{
+  try {
+    localStorage.setItem(recentKey, JSON.stringify(names));
+  } catch (e) {
+  }
+}
+
+/** Puts a workspace name at the top of the recent list. */
+export function rememberWorkspace(name)
+{
+  if (!name)
+    return;
+  saveRecent([name, ...recentWorkspaces().filter(n => n != name)].slice(0, maxRecent));
+}
+
+/** Takes a workspace name off the recent list. */
+export function forgetWorkspace(name)
+{
+  saveRecent(recentWorkspaces().filter(n => n != name));
+}

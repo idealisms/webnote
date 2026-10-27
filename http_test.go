@@ -687,6 +687,25 @@ func TestSaveTooLarge(t *testing.T) {
 	}
 }
 
+func TestOldPagesRedirect(t *testing.T) {
+	_, client := newTestClient(t)
+	s := newTestServer(client, time.Now())
+	for path, want := range map[string]string{
+		"/webnote/FAQ.html":   "https://test.aypwip.org/webnote/#questions",
+		"/webnote/hints.html": "https://test.aypwip.org/webnote/#tips",
+		"/":                   "https://test.aypwip.org/webnote/",
+	} {
+		r := httptest.NewRequest("GET", path, nil)
+		r.Host = "test.aypwip.org"
+		r.Header.Set("X-Forwarded-Proto", "https")
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, r)
+		if rec.Code != 301 || rec.Header().Get("Location") != want {
+			t.Errorf("GET %s: %d, Location %q, want 301 %q", path, rec.Code, rec.Header().Get("Location"), want)
+		}
+	}
+}
+
 func TestHostURLBehindAppEngine(t *testing.T) {
 	// App Engine's front end sets X-Forwarded-Proto; gunicorn turns it into
 	// the scheme, so production redirects to https.

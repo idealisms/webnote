@@ -321,3 +321,38 @@ test('docKeyDown: keys with no note on top are ignored', async () => {
   key(65);                // forwarded to the note
   key(68, true);          // Alt+D deletes it
 });
+
+test('recent workspaces: newest first, at most 8, and storage failures are ignored', async () => {
+  const {recentWorkspaces, rememberWorkspace, forgetWorkspace} = await load();
+  const store = {};
+  globalThis.localStorage = {
+    getItem: k => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = String(v); },
+  };
+  assert.deepEqual(recentWorkspaces(), []);
+  rememberWorkspace('a');
+  rememberWorkspace('Bogotá café');
+  rememberWorkspace('a');
+  rememberWorkspace('');
+  assert.deepEqual(recentWorkspaces(), ['a', 'Bogotá café']);
+  for (let i = 0; i < 10; i++)
+    rememberWorkspace('w' + i);
+  assert.equal(recentWorkspaces().length, 8);
+  assert.equal(recentWorkspaces()[0], 'w9');
+  forgetWorkspace('w9');
+  assert.equal(recentWorkspaces()[0], 'w8');
+
+  store['webnote.recent'] = '{"not": "a list"}';
+  assert.deepEqual(recentWorkspaces(), []);
+  store['webnote.recent'] = '["ok", 3, null]';
+  assert.deepEqual(recentWorkspaces(), ['ok']);
+
+  globalThis.localStorage = {
+    getItem() { throw new Error('blocked'); },
+    setItem() { throw new Error('blocked'); },
+  };
+  assert.deepEqual(recentWorkspaces(), []);
+  rememberWorkspace('x');  // doesn't throw
+  delete globalThis.localStorage;
+  assert.deepEqual(recentWorkspaces(), []);
+});

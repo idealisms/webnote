@@ -30,15 +30,6 @@ textarea {
   word-wrap: break-word;
 }
 
-div.tnote {
-  font-family: Arial, helvetica, sans-serif;
-  font-size: 1em;
-  border: 3px #000 solid;
-  padding: 4px;
-  background: #ffff30;
-  word-wrap: break-word;
-}
-
 div.note {
   font-family: Arial, helvetica, sans-serif;
   font-size: 100%;

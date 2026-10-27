@@ -19,7 +19,8 @@ func TestStaticFilesFromAppYAML(t *testing.T) {
 	for path, file := range map[string]string{
 		"/webnote/":                           "index.html",
 		"/webnote/webnote.js":                 "webnote.js",
-		"/webnote/FAQ.html":                   "FAQ.html",
+		"/webnote/FAQ.html":                   "", // redirected by the app
+		"/webnote/wp-layout.css":              "",
 		"/robots.txt":                         "robots.txt",
 		"/webnote/images/new.gif":             "images/new.gif",
 		"/favicon.ico":                        "webnote_favicon.ico",

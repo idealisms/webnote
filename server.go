@@ -120,7 +120,12 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch path {
 	case "/", "/webnote", "/webnote/index.html":
-		method("GET", func() { s.redirect(req) })
+		method("GET", func() { s.redirect(req, "/webnote/") })
+	// The FAQ and hints are sections of the home page now.
+	case "/webnote/FAQ.html":
+		method("GET", func() { s.redirect(req, "/webnote/#questions") })
+	case "/webnote/hints.html":
+		method("GET", func() { s.redirect(req, "/webnote/#tips") })
 	case "/webnote/strings.js":
 		method("GET", func() { s.strings(req) })
 	case "/webnote/save.py":
@@ -184,9 +189,9 @@ func writeBody(w http.ResponseWriter, contentType string, body []byte) {
 	w.Write(body)
 }
 
-func (s *server) redirect(req *request) {
+func (s *server) redirect(req *request, path string) {
 	req.w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	req.w.Header().Set("Location", hostURL(req.r)+"/webnote/")
+	req.w.Header().Set("Location", hostURL(req.r)+path)
 	req.w.WriteHeader(http.StatusMovedPermanently)
 }
 

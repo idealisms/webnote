@@ -95,9 +95,9 @@ def run(browser, base, name, previous):
     page.on('pageerror', lambda e: problems.append('JavaScript error: %s' % e))
 
     page.goto(base + '/webnote/')
-    check(page.evaluate("document.activeElement.id") == 'fakeName', 'the home page focuses the name')
-    page.fill('#fakeName', name)
-    page.press('#fakeName', 'Enter')
+    check(page.evaluate("document.activeElement.id") == 'name', 'the home page focuses the name')
+    page.fill('#name', name)
+    page.press('#name', 'Enter')
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
     check(page.evaluate('workspace.name') == name, 'home page form opens the workspace')
     check(page.inner_text('#wsname') == name and page.title() == name,
@@ -298,10 +298,10 @@ def run_ui(browser, base, name):
     page.route('**/save.py*', on_save)
 
     page.goto(base + '/webnote/')
-    page.fill('#fakeName', name)
-    page.click('input[value=load]')
+    page.fill('#name', name)
+    page.click('#openButton')
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
-    check(page.evaluate('workspace.name') == name, 'the home page\'s load button opens the workspace')
+    check(page.evaluate('workspace.name') == name, 'the home page\'s Open button opens the workspace')
     if page.evaluate('workspace.numNotes'):
         raise BrowserTestError('workspace %r for the UI test must be empty' % name)
 
@@ -663,10 +663,70 @@ def run_ui(browser, base, name):
     page.goto(base + '/webnote/')
     check([d[0] for d in dialogs] == ['beforeunload'],
           'leaving with unsaved changes asks first')
-    page.click('input[value="Load Sample"]')
+    page.click('text=try the sample workspace')
     page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
     check(page.evaluate('workspace.name') == 'Sample Workspace', 'the home page opens the sample')
     check(not problems, 'no JavaScript errors on the home page or the sample%s' % (
+        '' if not problems else ': %s' % problems))
+    page.close()
+
+
+def run_home(browser, base, name):
+    """The home page: the form, the recent list, the sections, the old FAQ
+    and hints URLs, the media and the footer. Opens name, without saving."""
+    page = browser.new_page()
+    problems = []
+    page.on('pageerror', lambda e: problems.append('JavaScript error: %s' % e))
+    page.goto(base + '/webnote/')
+    check(page.is_hidden('#recent'), 'a new browser has no recent list')
+    page.click('#openButton')
+    page.wait_for_timeout(300)
+    check(urllib.parse.urlsplit(page.url).path == '/webnote/', 'an empty name stays on the home page')
+
+    page.fill('#name', name)
+    page.press('#name', 'Enter')
+    page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
+    page.goto(base + '/webnote/')
+    links = page.locator('#recent li a')
+    check(page.is_visible('#recent') and links.all_inner_texts() == [name],
+          'the recent list has the opened workspace')
+    links.first.click()
+    page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
+    check(page.evaluate('workspace.name') == name, 'its link opens it')
+    page.goto(base + '/webnote/')
+    page.click('#recent li button')
+    check(page.is_hidden('#recent'), 'removing it empties and hides the list')
+    page.reload()
+    check(page.is_hidden('#recent'), 'and it stays removed')
+
+    check(page.locator('details').count() == 6 and not any(page.eval_on_selector_all('details', 'ds => ds.map(d => d.open)')),
+          'the sections start closed')
+    page.click('#tips summary')
+    check(page.eval_on_selector('#tips', 'd => d.open') and page.is_visible('#tips h3'),
+          'a section opens')
+    page.click('#tips summary')
+    check(not page.eval_on_selector('#tips', 'd => d.open'), 'and closes')
+    page.goto(base + '/webnote/#privacy')
+    check(page.eval_on_selector('#privacy', 'd => d.open'), '/webnote/#privacy opens that section')
+    page.evaluate("location.hash = 'saving'")
+    page.wait_for_function("document.getElementById('saving').open")
+    check(True, 'changing the hash opens that section')
+    for old, section in [('FAQ.html', 'questions'), ('hints.html', 'tips')]:
+        page.goto(base + '/webnote/' + old)
+        check(urllib.parse.urlsplit(page.url).fragment == section
+              and page.eval_on_selector('#' + section, 'd => d.open'),
+              '/webnote/%s goes to the %s section' % (old, section))
+
+    page.click('#about summary')
+    page.click('#using summary')
+    page.wait_for_function("document.querySelector('#about img').complete")
+    check(page.eval_on_selector('#about img', 'i => i.naturalWidth') == 960, 'the screenshot loads')
+    page.wait_for_function("document.querySelector('#using video').readyState >= 1")
+    check(page.eval_on_selector('#using video', 'v => v.videoWidth') == 960, 'the screencast loads')
+    hrefs = page.eval_on_selector_all('footer a', 'as => as.map(a => a.href)')
+    check(hrefs == ['mailto:webnote@ponderer.org', 'https://github.com/idealisms/webnote',
+                    'https://github.com/idealisms/webnote/issues'], 'the footer links')
+    check(not problems, 'no JavaScript errors on the home page%s' % (
         '' if not problems else ': %s' % problems))
     page.close()
 
@@ -695,6 +755,8 @@ def main():
                 ui_name = LOCAL_UI_WORKSPACE if not args.workspace else names[0] + UI_SUFFIX
                 print('%s: note interactions on %r' % (browser_name, ui_name))
                 run_ui(browser, base, ui_name)
+                print('%s: home page' % browser_name)
+                run_home(browser, base, ui_name)
                 for name in names:
                     print('%s: workspace %r' % (browser_name, name))
                     previous[name] = run(browser, base, name, previous.get(name))

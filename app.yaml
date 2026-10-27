@@ -12,12 +12,6 @@ handlers:
 - url: /robots\.txt
   static_files: robots.txt
   upload: robots\.txt
-- url: /webnote/FAQ\.html
-  static_files: FAQ.html
-  upload: FAQ\.html
-- url: /webnote/hints\.html
-  static_files: hints.html
-  upload: hints\.html
 - url: /webnote/webnote_favicon\.ico
   static_files: webnote_favicon.ico
   upload: webnote_favicon\.ico
@@ -33,9 +27,6 @@ handlers:
   mime_type: application/manifest+json
 - url: /webnote/icons
   static_dir: icons
-- url: /webnote/wp-layout\.css
-  static_files: wp-layout.css
-  upload: wp-layout\.css
 - url: /webnote/style\.css
   static_files: style.css
   upload: style\.css
