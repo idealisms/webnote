@@ -1,0 +1,16 @@
+# Feed requests (GET /webnote/NAME.xml or rss.py), by response status: 200
+# served, 304 not modified (rss() in server.go answers If-Modified-Since),
+# 404 no such workspace. Feed readers poll; few send If-Modified-Since.
+description: Webnote RSS feed requests, by HTTP status
+filter: >-
+  log_id("appengine.googleapis.com/request_log") AND protoPayload.method="GET"
+  AND protoPayload.resource=~"^/webnote/([^?]+\.xml|rss\.py)(\?|$)"
+labelExtractors:
+  status: EXTRACT(protoPayload.status)
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"
+  labels:
+  - key: status
+    valueType: STRING

@@ -9,6 +9,7 @@ log and the app's own log lines (`stdout`), and a dashboard that shows them.
 | `webnote_saves` | POSTs to `save.py` | `status` (200, 409, 500) |
 | `webnote_failed_saves` | "Failed to save workspace" log lines | none |
 | `webnote_5xx` | 5xx responses | `status` |
+| `webnote_rss` | feed requests (`NAME.xml`, `rss.py`) | `status` (200, 304, 404) |
 | `webnote_js_errors` | reports to `/webnote/jserror` | `version` (of `webnote.js`) |
 
 Create or update them all, and the "Webnote" dashboard, with
