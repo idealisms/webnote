@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"cloud.google.com/go/datastore"
+	"github.com/klauspost/compress/zstd"
 )
 
 // Revisions expire (by a TTL policy on time_to_delete) after 2 years.
@@ -33,7 +34,8 @@ type Workspace struct {
 type Notes struct {
 	WorkspaceKey *datastore.Key `datastore:"workspaceKey"`
 	Time         time.Time      `datastore:"time"`
-	// zlib-compressed JSON. See decodeNotes() and encodeNotes().
+	// Compressed JSON: zstd since 2026-10-27, zlib before. See decodeNotes()
+	// and encodeNotes().
 	NotesJSONArray []byte    `datastore:"notesJsonArray,noindex"`
 	TimeToDelete   time.Time `datastore:"time_to_delete"`
 }
@@ -118,6 +120,16 @@ var errTransactionFailed = errors.New("transaction failed")
 // loaded it. saveWorkspace returns it with the stored workspace.
 var errConflict = errors.New("saved since loaded")
 
+// errTooLarge is when a revision's compressed notes don't fit in a Datastore
+// entity.
+var errTooLarge = errors.New("workspace too large")
+
+// maxNotesBlob is the largest notesJsonArray saveWorkspace writes. Datastore
+// rejects a property over 1,048,487 bytes and an entity over 1,048,572, and
+// the rest of a Notes entity (key, workspaceKey, times, property names) is a
+// few hundred bytes, so this leaves room for both.
+const maxNotesBlob = 1_040_000
+
 // saveWorkspace saves a revision of a workspace, creating the workspace if
 // needed, and returns the workspace. Times are exact (to Datastore's
 // microseconds), so the time in the response is the stored one.
@@ -132,6 +144,9 @@ func saveWorkspace(ctx context.Context, client *datastore.Client, name string, n
 	blob, err := encodeNotes(notes)
 	if err != nil {
 		return nil, err
+	}
+	if len(blob) > maxNotesBlob {
+		return nil, fmt.Errorf("%w: %d bytes compressed", errTooLarge, len(blob))
 	}
 	var w *Workspace
 	// ndb.transaction(retries=5) makes up to 6 attempts.
@@ -170,19 +185,29 @@ type note []noteProperty
 
 type noteProperty struct{ Key, Value string }
 
-// encodeNotes returns the notesJsonArray blob for a list of notes: zlib
+// zstdEncoder and zstdDecoder are safe for concurrent EncodeAll and
+// DecodeAll calls. SpeedBetterCompression made the largest workspace (4.7 MB
+// of JSON) 30% smaller than zlib in the same time; SpeedBestCompression was
+// only 6% smaller again, and 4x slower.
+var (
+	zstdEncoder, _ = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBetterCompression),
+		zstd.WithEncoderConcurrency(1))
+	zstdDecoder, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0),
+		zstd.WithDecoderMaxMemory(64<<20))
+)
+
+// zstdMagic starts every zstd frame. zlib streams start with 0x78 and the
+// oldest, uncompressed revisions with '[' or a UTF-8 BOM, so it tells them
+// apart.
+var zstdMagic = []byte{0x28, 0xb5, 0x2f, 0xfd}
+
+// encodeNotes returns the notesJsonArray blob for a list of notes: zstd
 // compression of the same JSON that ndb's JsonProperty writes, which is
 // json.dumps(separators=(',', ':')), with non-ASCII characters escaped.
+// Revisions before 2026-10-27 are zlib, which ndb wrote; Go's zlib came out
+// ~2% larger than Python's, and zstd is ~30% smaller.
 func encodeNotes(notes []note) ([]byte, error) {
-	var buf bytes.Buffer
-	zw := zlib.NewWriter(&buf)
-	if _, err := zw.Write(notesJSON(notes)); err != nil {
-		return nil, err
-	}
-	if err := zw.Close(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return zstdEncoder.EncodeAll(notesJSON(notes), nil), nil
 }
 
 func notesJSON(notes []note) []byte {
@@ -253,11 +278,23 @@ var errNotesNotJSON = errors.New("notesJsonArray isn't JSON")
 // decodeNotes decodes a notesJsonArray blob like get_notes_list() in
 // models.py, returning a JSON value.
 //
-// Revisions are zlib-compressed JSON. ndb marks the ones it writes with
-// meaning 22 (a compressed JsonProperty); older ones lost the marker. This
-// client can't see the marker, so it follows Python's path for unmarked
-// blobs, which gives the same result for every blob ndb writes.
+// Revisions are zstd-compressed JSON (see encodeNotes()), or zlib from ndb
+// and earlier Go versions. ndb marks the ones it writes with meaning 22 (a
+// compressed JsonProperty); older ones lost the marker. This client can't
+// see the marker, so it follows Python's path for unmarked blobs, which
+// gives the same result for every blob ndb writes.
 func decodeNotes(blob []byte) (json.RawMessage, error) {
+	if bytes.HasPrefix(blob, zstdMagic) {
+		// Only this version writes zstd, so a bad one is a bug: fail rather
+		// than show an empty workspace that a save would then replace.
+		data, err := zstdDecoder.DecodeAll(blob, nil)
+		if err != nil {
+			return nil, fmt.Errorf("zstd notesJsonArray: %w", err)
+		} else if !utf8.Valid(data) || !json.Valid(data) {
+			return nil, errNotesNotJSON
+		}
+		return data, nil
+	}
 	if data, err := zlibDecompress(blob); err == nil && utf8.Valid(data) && json.Valid(data) {
 		return data, nil
 	}

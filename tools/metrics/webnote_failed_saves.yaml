@@ -1,5 +1,5 @@
-# Saves whose Datastore transaction failed (saveHandler() in server.go logs
-# "Failed to save workspace").
+# Saves whose Datastore transaction failed, or that were too large to store
+# (saveHandler() in server.go logs "Failed to save workspace" for both).
 description: Webnote saves that failed in the transaction
 filter: >-
   log_id("stdout") AND resource.type="gae_app"

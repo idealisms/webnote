@@ -536,8 +536,11 @@ def run_ui(browser, base, name):
     # A failed save says so, and the workspace stays unsaved.
     alert = page.evaluate('strings.SAVE_STATUS_ERROR')
     server_alert = page.evaluate('strings.SAVE_SERVER_ERROR.replace("$1", adminEmail)')
+    too_large = page.evaluate('strings.SAVE_TOO_LARGE')
     for response, message, what in [
-            ({'status': 500, 'body': 'error'}, alert, 'a 500'),
+            ({'status': 500, 'body': 'error'}, server_alert, 'a 500'),
+            ({'status': 413, 'content_type': 'text/xml',
+              'body': '<return><status value="toolarge"/></return>'}, too_large, 'a 413'),
             ({}, alert, 'a network error'),
             ({'status': 200, 'content_type': 'text/xml',
               'body': '<?xml version="1.0"?><status value="error"/>'}, server_alert,
@@ -589,7 +592,7 @@ def run_ui(browser, base, name):
           'the conflict links to the newer revision')
     page.keyboard.press('Alt+S')
     page.wait_for_timeout(300)
-    check(len(saves) == 4, 'Alt+S does nothing while the conflict is shown')
+    check(len(saves) == 5, 'Alt+S does nothing while the conflict is shown')
     conflict_button = lambda text: page.locator('#conflictDialog').get_by_role(
         'button', name=page.evaluate('strings.' + text), exact=True)
     conflict_button('CONFLICT_KEEP_EDITING').click()
@@ -598,7 +601,7 @@ def run_ui(browser, base, name):
           'keep editing closes it, and the workspace stays unsaved')
     page.click('#saveImg')
     page.wait_for_selector('#conflictDialog[open]')
-    check(len(saves) == 5 and page.locator('#conflictDialog').count() == 1
+    check(len(saves) == 6 and page.locator('#conflictDialog').count() == 1
           and not dialog_open(page, 'collisionDialog'),
           'saving again still conflicts, without the banner for the same save')
     page.keyboard.press('Escape')
@@ -654,7 +657,7 @@ def run_ui(browser, base, name):
           'an uncaught error is reported, without the page URL (%r)' % report)
     problems[:] = [p for p in problems if 'browsertest error' not in p]
 
-    check(len(saves) == 8, 'only the failed and conflicting saves were tried')
+    check(len(saves) == 9, 'only the failed and conflicting saves were tried')
     check(not dialogs and not problems, 'no other alerts or JavaScript errors%s' % (
         '' if not (dialogs or problems) else ': %s' % (dialogs + problems)))
     page.goto(base + '/webnote/')

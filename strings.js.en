@@ -64,6 +64,7 @@ var strings = {
   CONFLICT_KEEP_EDITING: 'Keep editing',
   DIALOG_CLOSE: 'Close',
   
+  SAVE_TOO_LARGE: 'Failed to save notes.  This workspace is too large to save.  Delete some notes or move them to another workspace, then try again.',
   SAVE_STATUS_ERROR: 'Failed to save notes.  Please make sure you have an internet connection and try again.',
   // $1 is the email address of the admin
   SAVE_SERVER_ERROR: 'Failed to save notes.  There is a problem with the server.  Please try again in a few minutes.  If the problem persists, please send an email to $1.'

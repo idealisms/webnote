@@ -457,6 +457,14 @@ func (s *server) saveHandler(req *request) {
 		req.w.WriteHeader(http.StatusConflict)
 		io.WriteString(req.w, `<return><status value="conflict" update="`+req.formatTime(ws.Time)+`"/></return>`)
 		return
+	} else if errors.Is(err, errTooLarge) {
+		// Logged like a failed transaction, so webnote_failed_saves counts it.
+		slog.Error("Failed to save workspace", "name", save.name, "error", err,
+			traceAttr(s.project, req.r))
+		req.w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+		req.w.WriteHeader(http.StatusRequestEntityTooLarge)
+		io.WriteString(req.w, `<return><status value="toolarge"/></return>`)
+		return
 	} else if errors.Is(err, errTransactionFailed) {
 		slog.Error("Failed to save workspace", "name", save.name, "error", err,
 			traceAttr(s.project, req.r))

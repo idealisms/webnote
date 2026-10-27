@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -305,8 +306,8 @@ func TestNotesStorageFormat(t *testing.T) {
 	if path["kind"] != "Workspace" || path["name"] != w.Key.Name {
 		t.Errorf("workspaceKey = %v", path)
 	}
-	// notesJsonArray is an unindexed blob of zlib-compressed JSON, without
-	// a meaning: Python reads that the way it reads pre-2025 revisions.
+	// notesJsonArray is an unindexed blob of zstd-compressed JSON, without
+	// a meaning.
 	blob := props["notesJsonArray"]
 	if blob["excludeFromIndexes"] != true || blob["meaning"] != nil {
 		t.Errorf("notesJsonArray = %v", blob)
@@ -315,10 +316,62 @@ func TestNotesStorageFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := zlibDecompress(raw)
+	if !bytes.HasPrefix(raw, zstdMagic) {
+		t.Errorf("notesJsonArray starts with % x, want zstd", raw[:4])
+	}
+	data, err := decompressNotes(raw)
 	if want := "[{\"id\":\"note0\",\"xPos\":\"10\",\"text\":\"caf\\u00e9\"}]"; err != nil || string(data) != want {
 		t.Errorf("notesJsonArray = %s, %v; want %s", data, err, want)
 	}
+}
+
+func TestSaveWorkspaceTooLarge(t *testing.T) {
+	ctx, client := newTestClient(t)
+	// Random letters barely compress, like the escaped text that hit the
+	// limit in production.
+	rng := rand.New(rand.NewPCG(1, 2))
+	text := make([]byte, 2_000_000)
+	for i := range text {
+		text[i] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%."[rng.IntN(64)]
+	}
+	notes := []note{{{"id", "note0"}, {"text", string(text)}}}
+	if _, err := saveWorkspace(ctx, client, "big", 1, notes, -1, time.Now); !errors.Is(err, errTooLarge) {
+		t.Fatalf("saveWorkspace = %v, want errTooLarge", err)
+	}
+	if ws, err := getWorkspace(ctx, client, "big"); ws != nil || err != nil {
+		t.Errorf("workspace saved: %v, %v", ws, err)
+	}
+}
+
+func TestDecodeNotesZstd(t *testing.T) {
+	blob, err := encodeNotes([]note{{{"id", "note0"}, {"text", "hello"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := decodeNotes(blob)
+	if err != nil || string(got) != `[{"id":"note0","text":"hello"}]` {
+		t.Errorf("decodeNotes = %s, %v", got, err)
+	}
+	// zlib revisions, from ndb and earlier versions, still decode.
+	old, err := zlibCompress([]byte(`[{"id":"note0"}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := decodeNotes(old); err != nil || string(got) != `[{"id":"note0"}]` {
+		t.Errorf("decodeNotes(zlib) = %s, %v", got, err)
+	}
+	// A damaged zstd blob is an error, not an empty workspace.
+	if got, err := decodeNotes(blob[:len(blob)-3]); err == nil {
+		t.Errorf("decodeNotes(truncated) = %s, want an error", got)
+	}
+}
+
+// decompressNotes returns the JSON in a notesJsonArray blob, zstd or zlib.
+func decompressNotes(blob []byte) ([]byte, error) {
+	if bytes.HasPrefix(blob, zstdMagic) {
+		return zstdDecoder.DecodeAll(blob, nil)
+	}
+	return zlibDecompress(blob)
 }
 
 func sameStrings(a, b []string) bool {

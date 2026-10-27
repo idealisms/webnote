@@ -149,7 +149,7 @@ func storedState(t *testing.T, ctx context.Context, client *datastore.Client) ma
 				ttd := n.TimeToDelete.UTC().Format(timeLayout)
 				s.Latest.TimeToDelete = &ttd
 			}
-			if data, err := zlibDecompress(n.NotesJSONArray); err == nil && utf8Valid(data) {
+			if data, err := decompressNotes(n.NotesJSONArray); err == nil && utf8Valid(data) {
 				s.Latest.Notes = string(data)
 			} else {
 				s.Latest.Notes = "raw:" + base64Std(n.NotesJSONArray)
@@ -450,9 +450,13 @@ var fixedSincePython = map[string]fixedResponse{
 
 // stringsSincePython are changes to strings.js since the port, applied to
 // Python's responses: times are shown in the browser's time zone, the
-// history's error and the save conflict warning are new, and the collision
-// warning is plain text.
+// history's error, the save conflict warning and the too-large save error
+// are new, and the collision warning is plain text.
 var stringsSincePython = strings.NewReplacer(
+	"  SAVE_STATUS_ERROR: 'Failed", "  SAVE_TOO_LARGE: 'Failed to save notes.  This workspace is too large to save.  Delete some notes or move them to another workspace, then try again.',\n"+
+		"  SAVE_STATUS_ERROR: 'Failed",
+	"  SAVE_STATUS_ERROR: 'Speichern", `  SAVE_TOO_LARGE: 'Speichern der Notizen ist fehlgeschlagen.  Dieser Arbeitsplatz ist zu gro\u00DF zum Speichern.  L\u00F6sche einige Notizen oder verschiebe sie auf einen anderen Arbeitsplatz und versuche es erneut.',`+"\n"+
+		"  SAVE_STATUS_ERROR: 'Speichern",
 	"all times are US Eastern Time (-0500)", "times are in your time zone",
 	"alle Zeiten sind in US Eastern Time (-0500)", "alle Zeiten in Ihrer Zeitzone",
 	"saved to this workspace.',\n", "saved to this workspace.',\n"+
@@ -604,6 +608,23 @@ func TestSaveTransactionFailure(t *testing.T) {
 	}
 	if ws, err := getWorkspace(ctx, client, "ws"); ws != nil || err != nil {
 		t.Errorf("workspace saved: %v, %v", ws, err)
+	}
+}
+
+func TestSaveTooLarge(t *testing.T) {
+	_, client := newTestClient(t)
+	s := newTestServer(client, time.Now())
+	s.save = func(context.Context, *datastore.Client, string, int64, []note, int64, func() time.Time) (*Workspace, error) {
+		return nil, fmt.Errorf("%w: test", errTooLarge)
+	}
+	r := httptest.NewRequest("POST", "/webnote/save.py", strings.NewReader("<workspace name='ws' nextNoteNum='1'></workspace>"))
+	rec := httptest.NewRecorder()
+	// One "Failed to save workspace" error, which webnote_failed_saves counts.
+	if n := countErrors(func() { s.ServeHTTP(rec, r) }); n != 1 {
+		t.Errorf("logged %d errors, want 1", n)
+	}
+	if rec.Code != 413 || rec.Body.String() != `<return><status value="toolarge"/></return>` {
+		t.Errorf("got %d %q", rec.Code, rec.Body.String())
 	}
 }
 

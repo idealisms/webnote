@@ -1755,13 +1755,11 @@ export const workspace =
     };
     fetch('save.py?epoch=1&loaded=' + this.loadedTime,
           {method: 'POST', body: workspace.toString()}).then(function(response) {
-      if (409 == response.status) {
-        return response.text().then(function(text) {
-          workspace.saveCallback(text);
-        });
-      }
-      if (200 != response.status) {
-        failed(response.status);
+      // 409 (conflict) and 413 (too large) explain themselves in the body.
+      if (200 != response.status && 409 != response.status && 413 != response.status) {
+        db(response.status);
+        alert(strings.SAVE_SERVER_ERROR.replace("$1", adminEmail));
+        workspace.setSaveState('');
         return;
       }
       return response.text().then(function(text) {
@@ -1781,6 +1779,8 @@ export const workspace =
       return;
     } else if (status && 'conflict' == status.getAttribute('value')) {
       this.showConflict(Number(status.getAttribute('update')));
+    } else if (status && 'toolarge' == status.getAttribute('value')) {
+      alert(strings.SAVE_TOO_LARGE);
     } else {
       alert(strings.SAVE_SERVER_ERROR.replace("$1", adminEmail));
     }

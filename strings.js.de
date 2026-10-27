@@ -64,6 +64,7 @@ var strings = {
   CONFLICT_KEEP_EDITING: 'Weiter bearbeiten',
   DIALOG_CLOSE: 'Schlie\u00DFen',
   
+  SAVE_TOO_LARGE: 'Speichern der Notizen ist fehlgeschlagen.  Dieser Arbeitsplatz ist zu gro\u00DF zum Speichern.  L\u00F6sche einige Notizen oder verschiebe sie auf einen anderen Arbeitsplatz und versuche es erneut.',
   SAVE_STATUS_ERROR: 'Speichern der Notizen ist fehlgeschlagen.  Bitte stelle sicher das du eine Verbindung mit dem Internet hast und versuche es erneut.',
   // $1 is the email address of the admin
   SAVE_SERVER_ERROR: 'Speichern der Notiyen ist fehlgeschlagen. Es gibt ein Problem mit dem Server. Bitte versuche es in einigen Minuten erneut.  Wenn das Problem weiterhin besteht, sende bitte eine Email an $1.'

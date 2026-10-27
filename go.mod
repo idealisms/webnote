@@ -2,7 +2,10 @@ module webnote
 
 go 1.27
 
-require cloud.google.com/go/datastore v1.28.0
+require (
+	cloud.google.com/go/datastore v1.28.0
+	github.com/klauspost/compress v1.20.3
+)
 
 require (
 	cloud.google.com/go v0.123.0 // indirect

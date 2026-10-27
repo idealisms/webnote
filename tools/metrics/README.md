@@ -6,7 +6,7 @@ log and the app's own log lines (`stdout`), and a dashboard that shows them.
 | Metric (`logging.googleapis.com/user/...`) | Counts | Labels |
 |---|---|---|
 | `webnote_page_loads` | workspace pages served (GET 200) | none |
-| `webnote_saves` | POSTs to `save.py` | `status` (200, 409, 500) |
+| `webnote_saves` | POSTs to `save.py` | `status` (200, 409, 413, 500) |
 | `webnote_failed_saves` | "Failed to save workspace" log lines | none |
 | `webnote_5xx` | 5xx responses | `status` |
 | `webnote_rss` | feed requests (`NAME.xml`, `rss.py`) | `status` (200, 304, 404) |
