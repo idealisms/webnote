@@ -102,9 +102,6 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// The path is decoded once. webob failed if that wasn't UTF-8, but the
 	// native escape() writes U+0080-U+00FF as Latin-1 bytes (%E9).
 	path := utf8OrLatin1(r.URL.Path)
-	// Route patterns end with Python's $, which also matches before a final
-	// newline.
-	path = strings.TrimSuffix(path, "\n")
 	method := func(allowed string, handle func()) {
 		// HEAD is served like GET; net/http drops the body.
 		if allowed == "GET" && r.Method == "HEAD" {

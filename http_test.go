@@ -408,6 +408,14 @@ var fixedSincePython = map[string]fixedResponse{
 	"GET /webnote/load.py?name=a;b": {status: 200, contains: "<title> a;b</title>"},
 	"GET /webnote/load.py?name=a%2": {status: 200, contains: "<title> a%2</title>"},
 
+	// A path ending in a newline doesn't match a route (Python's $ also
+	// matched before a final newline).
+	"GET /webnote/my-notes%0A":               {status: 404},
+	"GET /webnote/my-notes.xml%0A":           {status: 404},
+	"GET /webnote/strings.js%0A":             {status: 404},
+	"GET /webnote/getrecent.py%0A?name=many": {status: 404},
+	"GET /%0A":                               {status: 404},
+
 	// A path or query value that isn't UTF-8 is read as Latin-1, which is
 	// what the native escape() writes for U+0080-U+00FF.
 	"GET /webnote/caf%E9":                           {sameAs: "GET /webnote/caf%C3%A9"},
