@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -391,6 +393,16 @@ type fixedResponse struct {
 // fixedSincePython lists the golden cases where the Go version fixes a bug
 // that the Python version had, keyed by httpCase.String().
 var fixedSincePython = map[string]fixedResponse{
+	// HEAD is served like GET (net/http drops the body; the recorder keeps
+	// it), and GET-only routes' 405s allow it (see TestHTTPMatchesPython).
+	"HEAD /":                             {sameAs: "GET /"},
+	"HEAD /webnote/Sample%2520Workspace": {sameAs: "GET /webnote/Sample%2520Workspace"},
+	"HEAD /webnote/getrecent.py":         {sameAs: "GET /webnote/getrecent.py"},
+	"HEAD /webnote/getdates.py":          {sameAs: "GET /webnote/getdates.py"},
+	"HEAD /webnote/strings.js":           {sameAs: "GET /webnote/strings.js"},
+	"HEAD /webnote/rss.xml":              {sameAs: "GET /webnote/rss.xml"},
+	"HEAD /webnote/load.py?name=x":       {status: 200},
+
 	// A path or query value that isn't UTF-8 is read as Latin-1, which is
 	// what the native escape() writes for U+0080-U+00FF.
 	"GET /webnote/caf%E9":                           {sameAs: "GET /webnote/caf%C3%A9"},
@@ -526,6 +538,10 @@ func TestHTTPMatchesPython(t *testing.T) {
 		cases[c.String()] = c
 		if strings.HasPrefix(c.Request.Path, "/webnote/strings.js") {
 			c.Response.Body = []byte(stringsSincePython.Replace(string(c.Response.Body)))
+		}
+		// GET routes also serve HEAD.
+		if c.Response.Allow == "GET" {
+			c.Response.Allow = "GET, HEAD"
 		}
 	}
 	unused := map[string]bool{}
@@ -1044,5 +1060,40 @@ func TestJSError(t *testing.T) {
 	s.ServeHTTP(rec, httptest.NewRequest("GET", "/webnote/jserror", nil))
 	if rec.Code != 405 || rec.Header().Get("Allow") != "POST" {
 		t.Errorf("GET: got %d, Allow %q", rec.Code, rec.Header().Get("Allow"))
+	}
+}
+
+func TestHeadServedLikeGet(t *testing.T) {
+	ctx, client := newTestClient(t)
+	at := time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
+	putNotes(t, ctx, client, putWorkspace(t, ctx, client, "ws", at, 1), at, `[{"id":"n","text":"x"}]`)
+	ts := httptest.NewServer(newTestServer(client, at))
+	defer ts.Close()
+	for _, path := range []string{"/webnote/ws", "/webnote/ws.xml", "/webnote/getrecent.py?name=ws", "/webnote/strings.js"} {
+		get, err := http.Get(ts.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(get.Body)
+		get.Body.Close()
+		head, err := http.Head(ts.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		headBody, _ := io.ReadAll(head.Body)
+		head.Body.Close()
+		if head.StatusCode != 200 || len(headBody) != 0 ||
+			head.Header.Get("Content-Type") != get.Header.Get("Content-Type") ||
+			head.ContentLength != int64(len(body)) {
+			t.Errorf("HEAD %s: %d, %d body bytes, Content-Type %q, Content-Length %d; GET: %q, %d bytes",
+				path, head.StatusCode, len(headBody), head.Header.Get("Content-Type"), head.ContentLength,
+				get.Header.Get("Content-Type"), len(body))
+		}
+	}
+	// Routes that take only POST don't take HEAD either.
+	rec := httptest.NewRecorder()
+	newTestServer(client, at).ServeHTTP(rec, httptest.NewRequest("HEAD", "/webnote/save.py", nil))
+	if rec.Code != 405 || rec.Header().Get("Allow") != "POST" {
+		t.Errorf("HEAD save.py: %d, Allow %q", rec.Code, rec.Header().Get("Allow"))
 	}
 }

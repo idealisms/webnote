@@ -106,7 +106,15 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// newline.
 	path = strings.TrimSuffix(path, "\n")
 	method := func(allowed string, handle func()) {
+		// HEAD is served like GET; net/http drops the body.
+		if allowed == "GET" && r.Method == "HEAD" {
+			handle()
+			return
+		}
 		if r.Method != allowed {
+			if allowed == "GET" {
+				allowed = "GET, HEAD"
+			}
 			w.Header().Set("Allow", allowed)
 			http.Error(w, "405 Method Not Allowed", http.StatusMethodNotAllowed)
 			return
@@ -174,6 +182,8 @@ func hostURL(r *http.Request) string {
 
 func writeBody(w http.ResponseWriter, contentType string, body []byte) {
 	w.Header().Set("Content-Type", contentType)
+	// Set even past net/http's 2 KB buffer, so HEAD has it too.
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.Write(body)
 }
 
