@@ -679,6 +679,8 @@ def run_home(browser, base, name):
     page.on('pageerror', lambda e: problems.append('JavaScript error: %s' % e))
     page.goto(base + '/webnote/')
     check(page.is_hidden('#recent'), 'a new browser has no recent list')
+    check(page.eval_on_selector('#name', 'e => e.name == "fakeName" && e.autocomplete != "off"'),
+          'the name box keeps the old page\'s autocomplete entries')
     page.click('#openButton')
     page.wait_for_timeout(300)
     check(urllib.parse.urlsplit(page.url).path == '/webnote/', 'an empty name stays on the home page')

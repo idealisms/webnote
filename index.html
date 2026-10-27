@@ -243,7 +243,9 @@ if (video && matchMedia('(prefers-reduced-motion: reduce)').matches) {
   <form id="openForm">
     <label for="name">Workspace name</label>
     <div class="open">
-      <input id="name" autofocus autocomplete="off" spellcheck="false">
+      <!-- Browsers file autocomplete entries under the field's name; the old
+           page's field was fakeName, so this keeps the names people typed. -->
+      <input id="name" name="fakeName" autofocus spellcheck="false">
       <button id="openButton">Open</button>
     </div>
     <p class="hint">A new name creates a new workspace. Anyone who knows the
