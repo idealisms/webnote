@@ -417,6 +417,11 @@ var fixedSincePython = map[string]fixedResponse{
 	"GET /webnote/getrecent.py%0A?name=many": {status: 404},
 	"GET /%0A":                               {status: 404},
 
+	// A raw '/' in a name redirects to the client's link for it, so the
+	// page's relative URLs work (see TestSlashRedirects).
+	"GET /webnote/a/b":            {status: 301},
+	"GET /webnote/getrecent.py/x": {status: 301},
+
 	// Numbers are ASCII digits only (Python's int() also took '_' between
 	// digits and other scripts' digits); anything else is 0, as before.
 	"GET /webnote/getdates.py?name=many&offset=1_0":       {sameAs: "GET /webnote/getdates.py?name=many&offset=0"},
@@ -702,6 +707,74 @@ func TestOldPagesRedirect(t *testing.T) {
 		s.ServeHTTP(rec, r)
 		if rec.Code != 301 || rec.Header().Get("Location") != want {
 			t.Errorf("GET %s: %d, Location %q, want 301 %q", path, rec.Code, rec.Header().Get("Location"), want)
+		}
+	}
+}
+
+// Links to the Apache version that it redirected or rewrote.
+func TestApacheURLsRedirect(t *testing.T) {
+	_, client := newTestClient(t)
+	s := newTestServer(client, time.Now())
+	for path, want := range map[string]string{
+		"/webnote/index.php":                       "/webnote/",
+		"/index.html":                              "/webnote/",
+		"/webnote/Sample%2520Workspace/":           "/webnote/Sample%252520Workspace",
+		"/webnote/Sample%2520Workspace//?time=x":   "/webnote/Sample%252520Workspace?time=x",
+		"/webnote/my-notes.xml/":                   "/webnote/my-notes.xml",
+		"/webnote/Sample%2520Workspace/index.xml":  "/webnote/Sample%252520Workspace.xml",
+		"/webnote/Sample%2520Workspace/index.xml/": "/webnote/Sample%252520Workspace.xml",
+		"/webnote/a/b":                             "/webnote/a%25252Fb",
+		"/webnote/a/b/":                            "/webnote/a%25252Fb",
+		"/webnote/a%252Fb/":                        "/webnote/a%25252Fb",
+		"/webnote//":                               "/webnote/",
+		"/webnote//index.xml":                      "/webnote/",
+	} {
+		r := httptest.NewRequest("GET", path, nil)
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, r)
+		if want = "http://example.com" + want; rec.Code != 301 || rec.Header().Get("Location") != want {
+			t.Errorf("GET %s: %d, Location %q, want 301 %q", path, rec.Code, rec.Header().Get("Location"), want)
+		}
+	}
+	// A feed with a '/' in its name has no relative URLs to break.
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest("GET", "/webnote/a/b.xml", nil))
+	if rec.Code != 404 {
+		t.Errorf("GET /webnote/a/b.xml: %d, want the missing feed's 404", rec.Code)
+	}
+}
+
+// A path with a raw '/' redirects to a page for the same workspace.
+func TestSlashRedirects(t *testing.T) {
+	ctx, client := newTestClient(t)
+	at := time.Date(2026, 10, 27, 0, 0, 0, 0, time.UTC)
+	s := newTestServer(client, at)
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		return rec
+	}
+	for _, name := range []string{"10/27", "a b/c", "Bogotá/café"} {
+		stored := canonicalWsName(name)
+		putNotes(t, ctx, client, putWorkspace(t, ctx, client, stored, at, 1), at, `[{"id":"slashnote","text":"x"}]`)
+		link := "/webnote/" + pyQuote(pyQuote(stored))
+		for _, path := range []string{
+			"/webnote/" + pyQuote(name),        // typed by hand
+			"/webnote/" + pyQuote(name) + "/",  // with a trailing slash
+			"/webnote/" + pyQuote(name) + "//", // or two
+		} {
+			rec := get(path)
+			if loc := rec.Header().Get("Location"); rec.Code != 301 || loc != "http://example.com"+link {
+				t.Errorf("%s: %d, Location %q, want 301 to %s", path, rec.Code, loc, link)
+				continue
+			}
+			if page := get(link); page.Code != 200 || !strings.Contains(page.Body.String(), "slashnote") {
+				t.Errorf("%s: %s is a %d without the workspace's notes", path, link, page.Code)
+			}
+		}
+		if feed := get("/webnote/" + pyQuote(name) + "/index.xml"); feed.Code != 301 ||
+			get(strings.TrimPrefix(feed.Header().Get("Location"), "http://example.com")).Code != 200 {
+			t.Errorf("%q: NAME/index.xml doesn't redirect to its feed", name)
 		}
 	}
 }

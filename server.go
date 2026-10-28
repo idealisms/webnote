@@ -119,7 +119,8 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		handle()
 	}
 	switch path {
-	case "/", "/webnote", "/webnote/index.html":
+	// index.php and /index.html are from the Apache version.
+	case "/", "/webnote", "/webnote/index.html", "/webnote/index.php", "/index.html":
 		method("GET", func() { s.redirect(req, "/webnote/") })
 	// The FAQ and hints are sections of the home page now.
 	case "/webnote/FAQ.html":
@@ -141,7 +142,12 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/webnote/jserror":
 		method("POST", func() { s.jsError(req) })
 	default:
-		if m := rssRoute.FindStringSubmatch(path); m != nil {
+		if target, ok := slashRedirect(r.URL.EscapedPath()); ok && loadRoute.MatchString(path) {
+			if r.URL.RawQuery != "" {
+				target += "?" + r.URL.RawQuery
+			}
+			method("GET", func() { s.redirect(req, target) })
+		} else if m := rssRoute.FindStringSubmatch(path); m != nil {
 			method("GET", func() { s.rss(req, m[1], true) })
 		} else if m := loadRoute.FindStringSubmatch(path); m != nil {
 			method("GET", func() { s.load(req, m[1], true) })
@@ -149,6 +155,47 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "404 Not Found", http.StatusNotFound)
 		}
 	}
+}
+
+// slashRedirect is where a path with a raw '/' after /webnote/ goes, since
+// the workspace page's relative URLs (strings.js, style.css) would resolve
+// under the name and get workspace pages back. Trailing '/'s are dropped
+// (Apache redirected NAME/ to NAME), NAME/index.xml goes to NAME's feed
+// (Apache served it there), and the rest goes to the link the client makes
+// for the workspace. A feed with a '/' in its name is served as is.
+func slashRedirect(escapedPath string) (string, bool) {
+	rest, ok := strings.CutPrefix(escapedPath, "/webnote/")
+	if !ok || !strings.Contains(rest, "/") {
+		return "", false
+	}
+	trimmed := strings.TrimRight(rest, "/")
+	if feed, ok := strings.CutSuffix(trimmed, "/index.xml"); ok {
+		if strings.Trim(feed, "/") == "" {
+			return "/webnote/", true
+		}
+		return workspacePath(feed) + ".xml", true
+	}
+	if strings.HasSuffix(trimmed, ".xml") {
+		if trimmed == rest {
+			return "", false
+		}
+		return "/webnote/" + trimmed, true
+	}
+	return workspacePath(trimmed), true
+}
+
+// workspacePath is the client's link (escape(escape(myescape(name)))) for
+// the workspace that a path's escaped name opens.
+func workspacePath(escapedName string) string {
+	decoded, err := url.PathUnescape(escapedName)
+	if err != nil {
+		decoded = escapedName
+	}
+	name := string(pyUnquote([]rune(utf8OrLatin1(decoded))))
+	if name == "" {
+		return "/webnote/"
+	}
+	return "/webnote/" + pyQuote(pyQuote(canonicalWsName(name)))
 }
 
 // badRequest answers a request that can't be served as sent. Python
