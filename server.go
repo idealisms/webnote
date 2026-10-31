@@ -45,11 +45,12 @@ var homeAliases = map[string]bool{
 
 // canonicalHost is the site's address. Requests to redirectHosts 301 to it,
 // keeping the path and query. The Apache version already sent aypwip.org
-// to www.aypwip.org. Version URLs (*.appspot.com) aren't redirected, so a
-// deploy can be tried before it gets traffic.
+// to www.aypwip.org, and test.aypwip.org was the address until 2026-10-30.
+// Version URLs (*.appspot.com) aren't redirected, so a deploy can be tried
+// before it gets traffic.
 const canonicalHost = "www.aypwip.org"
 
-var redirectHosts = map[string]bool{"aypwip.org": true}
+var redirectHosts = map[string]bool{"aypwip.org": true, "test.aypwip.org": true}
 
 var workspaceTemplate = template.Must(template.ParseFS(files, "templates/workspace.gotmpl"))
 

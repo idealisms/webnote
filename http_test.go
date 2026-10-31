@@ -700,12 +700,12 @@ func TestOldPagesRedirect(t *testing.T) {
 	_, client := newTestClient(t)
 	s := newTestServer(client, time.Now())
 	for path, want := range map[string]string{
-		"/webnote/FAQ.html":   "https://test.aypwip.org/webnote/#questions",
-		"/webnote/hints.html": "https://test.aypwip.org/webnote/#tips",
-		"/":                   "https://test.aypwip.org/webnote/",
+		"/webnote/FAQ.html":   "https://www.aypwip.org/webnote/#questions",
+		"/webnote/hints.html": "https://www.aypwip.org/webnote/#tips",
+		"/":                   "https://www.aypwip.org/webnote/",
 	} {
 		r := httptest.NewRequest("GET", path, nil)
-		r.Host = "test.aypwip.org"
+		r.Host = "www.aypwip.org"
 		r.Header.Set("X-Forwarded-Proto", "https")
 		rec := httptest.NewRecorder()
 		s.ServeHTTP(rec, r)
@@ -828,7 +828,8 @@ func TestHostRedirects(t *testing.T) {
 		{"GET", "aypwip.org", "/robots.txt", "https://www.aypwip.org/robots.txt"},
 		{"POST", "aypwip.org", "/webnote/save.py", "https://www.aypwip.org/webnote/save.py"},
 		{"GET", "www.aypwip.org", "/", "https://www.aypwip.org/webnote/"},
-		{"GET", "test.aypwip.org", "/", "https://test.aypwip.org/webnote/"},
+		{"GET", "test.aypwip.org", "/", "https://www.aypwip.org/webnote/"},
+		{"GET", "test.aypwip.org", "/webnote/a%2520b?time=x", "https://www.aypwip.org/webnote/a%2520b?time=x"},
 		{"GET", "webnote-184120.appspot.com", "/", "https://webnote-184120.appspot.com/webnote/"},
 	} {
 		r := httptest.NewRequest(c.method, c.path, nil)
@@ -856,8 +857,8 @@ func TestHostURLBehindAppEngine(t *testing.T) {
 	_, client := newTestClient(t)
 	s := newTestServer(client, time.Now())
 	for _, c := range []struct{ host, proto, want string }{
-		{"test.aypwip.org", "https", "https://test.aypwip.org/webnote/"},
-		{"test.aypwip.org:443", "https", "https://test.aypwip.org/webnote/"},
+		{"www.aypwip.org", "https", "https://www.aypwip.org/webnote/"},
+		{"www.aypwip.org:443", "https", "https://www.aypwip.org/webnote/"},
 		{"localhost:80", "", "http://localhost/webnote/"},
 		{"localhost:8080", "", "http://localhost:8080/webnote/"},
 	} {

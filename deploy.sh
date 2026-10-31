@@ -19,7 +19,7 @@ while [ $# -gt 0 ]; do
 done
 
 PROJECT=webnote-184120
-LIVE_URL=https://test.aypwip.org
+LIVE_URL=https://www.aypwip.org
 VERSION=$(date +%Y%m%dt%H%M%S)
 
 cd "$(dirname "$0")"

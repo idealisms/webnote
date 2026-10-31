@@ -2,7 +2,7 @@
 
 Usage:
   python smoketest.py https://VERSION-dot-webnote-184120.uc.r.appspot.com
-  python smoketest.py https://test.aypwip.org
+  python smoketest.py https://www.aypwip.org
 
   # Also compare existing workspaces (read-only) against another version:
   python smoketest.py NEW_URL --compare-with OLD_URL --workspace NAME ...

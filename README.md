@@ -1,5 +1,5 @@
 A port of http://www.aypwip.org/webnote to app engine.
-Live at https://test.aypwip.org/webnote/ .
+Live at https://www.aypwip.org/webnote/ .
 
 The server is Go (`server.go`, `app.yaml`). It replaced a Python app on
 2026-10-23; the Python code was removed after commit 85a04b5. Comments that
@@ -41,7 +41,7 @@ python3 browsertest.py http://localhost:8080   # needs Playwright, see the scrip
   version deployed with `--no-promote` against the live site
 ```sh
 python3 difftest.py https://VERSION-dot-webnote-184120.uc.r.appspot.com \
-    https://test.aypwip.org --names-file NAMES_FILE --sample 200
+    https://www.aypwip.org --names-file NAMES_FILE --sample 200
 ```
   `NAMES_FILE` lists stored workspace names (user data; keep it out of the repo).
   The script compares getrecent, every getdates page, the workspace page, older
