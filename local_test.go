@@ -17,7 +17,7 @@ func TestStaticFilesFromAppYAML(t *testing.T) {
 	})
 	h := withStaticFiles(handlers, next)
 	for path, file := range map[string]string{
-		"/webnote/":                           "index.html",
+		"/webnote/":                           "", // served by the app
 		"/webnote/webnote.js":                 "webnote.js",
 		"/webnote/FAQ.html":                   "", // redirected by the app
 		"/webnote/wp-layout.css":              "",

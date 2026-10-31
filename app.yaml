@@ -4,40 +4,48 @@ runtime: go127
 automatic_scaling:
   max_instances: 1
 
+# secure: always redirects http to https. The app serves /webnote/ (see
+# homePage in server.go).
 handlers:
-- url: /webnote/
-  static_files: index.html
-  upload: index.html
-
 - url: /robots\.txt
+  secure: always
   static_files: robots.txt
   upload: robots\.txt
 - url: /webnote/webnote_favicon\.ico
+  secure: always
   static_files: webnote_favicon.ico
   upload: webnote_favicon\.ico
 # Browsers ask for /favicon.ico on pages without an icon link (the feed).
 - url: /favicon\.ico
+  secure: always
   static_files: webnote_favicon.ico
   upload: webnote_favicon\.ico
 # icons/: the SVG favicon, the PNGs for phones and the web manifest (see
 # tools/make_icons.py).
 - url: /webnote/icons/manifest\.webmanifest
+  secure: always
   static_files: icons/manifest.webmanifest
   upload: icons/manifest\.webmanifest
   mime_type: application/manifest+json
 - url: /webnote/icons
+  secure: always
   static_dir: icons
 - url: /webnote/style\.css
+  secure: always
   static_files: style.css
   upload: style\.css
 - url: /webnote/objects\.js
+  secure: always
   static_files: objects.js
   upload: objects\.js
 - url: /webnote/webnote\.js
+  secure: always
   static_files: webnote.js
   upload: webnote\.js
 - url: /webnote/images
+  secure: always
   static_dir: images
 
 - url: /.*
+  secure: always
   script: auto

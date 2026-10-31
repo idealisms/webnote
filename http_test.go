@@ -422,6 +422,10 @@ var fixedSincePython = map[string]fixedResponse{
 	"GET /webnote/a/b":            {status: 301},
 	"GET /webnote/getrecent.py/x": {status: 301},
 
+	// The app serves the home page, which app.yaml served as a static file
+	// (see TestHomePage).
+	"GET /webnote/": {status: 200, contains: "<title>Webnote: sticky notes in your browser</title>"},
+
 	// Numbers are ASCII digits only (Python's int() also took '_' between
 	// digits and other scripts' digits); anything else is 0, as before.
 	"GET /webnote/getdates.py?name=many&offset=1_0":       {sameAs: "GET /webnote/getdates.py?name=many&offset=0"},
@@ -776,6 +780,73 @@ func TestSlashRedirects(t *testing.T) {
 			get(strings.TrimPrefix(feed.Header().Get("Location"), "http://example.com")).Code != 200 {
 			t.Errorf("%q: NAME/index.xml doesn't redirect to its feed", name)
 		}
+	}
+}
+
+func TestHomePage(t *testing.T) {
+	_, client := newTestClient(t)
+	s := newTestServer(client, time.Now())
+	want, err := os.ReadFile("index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest("GET", "/webnote/", nil))
+	if rec.Code != 200 || rec.Body.String() != string(want) {
+		t.Fatalf("GET /webnote/: %d, body %.40q, want index.html", rec.Code, rec.Body.String())
+	}
+	for k, v := range map[string]string{
+		"Content-Type":  "text/html; charset=utf-8",
+		"Cache-Control": "public, max-age=600",
+	} {
+		if got := rec.Header().Get(k); got != v {
+			t.Errorf("%s: %q, want %q", k, got, v)
+		}
+	}
+	etag := rec.Header().Get("ETag")
+	r := httptest.NewRequest("GET", "/webnote/", nil)
+	r.Header.Set("If-None-Match", etag)
+	rec = httptest.NewRecorder()
+	s.ServeHTTP(rec, r)
+	if etag == "" || rec.Code != 304 {
+		t.Errorf("If-None-Match %q: %d, want 304", etag, rec.Code)
+	}
+}
+
+// Requests to aypwip.org go to the same URL on www.aypwip.org, as the
+// Apache version sent them, except the home page's other addresses go
+// straight to the home page.
+func TestHostRedirects(t *testing.T) {
+	_, client := newTestClient(t)
+	s := newTestServer(client, time.Now())
+	for _, c := range []struct{ method, host, path, want string }{
+		{"GET", "aypwip.org", "/", "https://www.aypwip.org/webnote/"},
+		{"GET", "aypwip.org", "/index.html", "https://www.aypwip.org/webnote/"},
+		{"GET", "aypwip.org", "/webnote/", "https://www.aypwip.org/webnote/"},
+		{"GET", "AYPWIP.org:443", "/webnote/a%2520b?time=x", "https://www.aypwip.org/webnote/a%2520b?time=x"},
+		{"GET", "aypwip.org", "/webnote/a/b", "https://www.aypwip.org/webnote/a/b"},
+		{"GET", "aypwip.org", "/robots.txt", "https://www.aypwip.org/robots.txt"},
+		{"POST", "aypwip.org", "/webnote/save.py", "https://www.aypwip.org/webnote/save.py"},
+		{"GET", "www.aypwip.org", "/", "https://www.aypwip.org/webnote/"},
+		{"GET", "test.aypwip.org", "/", "https://test.aypwip.org/webnote/"},
+		{"GET", "webnote-184120.appspot.com", "/", "https://webnote-184120.appspot.com/webnote/"},
+	} {
+		r := httptest.NewRequest(c.method, c.path, nil)
+		r.Host = c.host
+		r.Header.Set("X-Forwarded-Proto", "https")
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, r)
+		if got := rec.Header().Get("Location"); rec.Code != 301 || got != c.want {
+			t.Errorf("%s %s%s: %d, Location %q, want 301 %q", c.method, c.host, c.path, rec.Code, got, c.want)
+		}
+	}
+	// Hosts that aren't redirected serve pages.
+	r := httptest.NewRequest("GET", "/webnote/", nil)
+	r.Host = "www.aypwip.org"
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, r)
+	if rec.Code != 200 {
+		t.Errorf("GET www.aypwip.org/webnote/: %d, want 200", rec.Code)
 	}
 }
 

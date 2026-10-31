@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -23,8 +24,32 @@ import (
 	"cloud.google.com/go/datastore"
 )
 
-//go:embed strings.js.en strings.js.de templates/workspace.gotmpl
+//go:embed strings.js.en strings.js.de templates/workspace.gotmpl index.html
 var files embed.FS
+
+// The home page, served by the app rather than app.yaml so that the hosts
+// in redirectHosts redirect it too.
+var homePage, _ = files.ReadFile("index.html")
+
+var homeETag = func() string {
+	sum := sha256.Sum256(homePage)
+	return fmt.Sprintf(`"%x"`, sum[:8])
+}()
+
+// homeAliases redirect to the home page. index.php and /index.html are from
+// the Apache version.
+var homeAliases = map[string]bool{
+	"/": true, "/webnote": true, "/webnote/index.html": true,
+	"/webnote/index.php": true, "/index.html": true,
+}
+
+// canonicalHost is the site's address. Requests to redirectHosts 301 to it,
+// keeping the path and query. The Apache version already sent aypwip.org
+// to www.aypwip.org. Version URLs (*.appspot.com) aren't redirected, so a
+// deploy can be tried before it gets traffic.
+const canonicalHost = "www.aypwip.org"
+
+var redirectHosts = map[string]bool{"aypwip.org": true}
 
 var workspaceTemplate = template.Must(template.ParseFS(files, "templates/workspace.gotmpl"))
 
@@ -102,6 +127,15 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// The path is decoded once. webob failed if that wasn't UTF-8, but the
 	// native escape() writes U+0080-U+00FF as Latin-1 bytes (%E9).
 	path := utf8OrLatin1(r.URL.Path)
+	if host, _, _ := strings.Cut(r.Host, ":"); redirectHosts[strings.ToLower(host)] {
+		target := r.URL.RequestURI()
+		if homeAliases[path] {
+			target = "/webnote/"
+		}
+		w.Header().Set("Location", "https://"+canonicalHost+target)
+		w.WriteHeader(http.StatusMovedPermanently)
+		return
+	}
 	method := func(allowed string, handle func()) {
 		// HEAD is served like GET; net/http drops the body.
 		if allowed == "GET" && r.Method == "HEAD" {
@@ -118,10 +152,13 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		handle()
 	}
-	switch path {
-	// index.php and /index.html are from the Apache version.
-	case "/", "/webnote", "/webnote/index.html", "/webnote/index.php", "/index.html":
+	if homeAliases[path] {
 		method("GET", func() { s.redirect(req, "/webnote/") })
+		return
+	}
+	switch path {
+	case "/webnote/":
+		method("GET", func() { serveHome(req) })
 	// The FAQ and hints are sections of the home page now.
 	case "/webnote/FAQ.html":
 		method("GET", func() { s.redirect(req, "/webnote/#questions") })
@@ -234,6 +271,15 @@ func writeBody(w http.ResponseWriter, contentType string, body []byte) {
 	// Set even past net/http's 2 KB buffer, so HEAD has it too.
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.Write(body)
+}
+
+// serveHome serves index.html with the headers App Engine gave it as a
+// static file.
+func serveHome(req *request) {
+	req.w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	req.w.Header().Set("Cache-Control", "public, max-age=600")
+	req.w.Header().Set("ETag", homeETag)
+	http.ServeContent(req.w, req.r, "", time.Time{}, bytes.NewReader(homePage))
 }
 
 func (s *server) redirect(req *request, path string) {
