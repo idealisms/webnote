@@ -1,12 +1,14 @@
 """Records the home page's screenshot and screencast from a running server.
 
 Usage (from the repo root, with Playwright in the scratch venv browsertest.py
-uses, and ffmpeg and cwebp installed):
+uses, with Pillow, and ffmpeg and cwebp installed):
   PORT=8091 EMULATOR_PORT=8472 ./run_local.sh   # in another terminal
   python tools/make_landing_media.py http://localhost:8091
 
 Writes:
   images/landing-workspace.webp  a workspace with a few notes (960x540)
+  images/social-preview.png      the same, for link previews (og:image),
+                                 since not every site reads WebP
   images/landing-new-note.webm   making a note, typing in it, moving it and
                                  coloring it (960x540, VP9, no audio)
 
@@ -21,6 +23,7 @@ import sys
 import tempfile
 import time
 
+from PIL import Image
 from playwright.sync_api import sync_playwright
 
 SIZE = {'width': 960, 'height': 540}
@@ -82,6 +85,13 @@ def screenshot(browser, base, out):
     with tempfile.NamedTemporaryFile(suffix='.png') as png:
         page.screenshot(path=png.name)
         subprocess.run(['cwebp', '-quiet', '-q', '82', png.name, '-o', out], check=True)
+        # 256 colors without dithering keeps the text sharp at a third of
+        # the size; fewer colors shift the notes' text colors.
+        preview = os.path.join(os.path.dirname(out), 'social-preview.png')
+        Image.open(png.name).convert('RGB').quantize(
+            256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE
+        ).save(preview, optimize=True)
+        print('%s: %d bytes' % (preview, os.path.getsize(preview)))
     page.close()
 
 

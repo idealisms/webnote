@@ -128,7 +128,9 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// The path is decoded once. webob failed if that wasn't UTF-8, but the
 	// native escape() writes U+0080-U+00FF as Latin-1 bytes (%E9).
 	path := utf8OrLatin1(r.URL.Path)
-	if host, _, _ := strings.Cut(r.Host, ":"); redirectHosts[strings.ToLower(host)] {
+	host, _, _ := strings.Cut(r.Host, ":")
+	host = strings.ToLower(host)
+	if redirectHosts[host] {
 		target := r.URL.RequestURI()
 		if homeAliases[path] {
 			target = "/webnote/"
@@ -136,6 +138,12 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", "https://"+canonicalHost+target)
 		w.WriteHeader(http.StatusMovedPermanently)
 		return
+	}
+	// Search engines index only the home page at its address. Workspaces
+	// and feeds hold people's notes (any name opens one, so there are
+	// endless empty ones), and anyone can edit them.
+	if path != "/webnote/" || host != canonicalHost {
+		w.Header().Set("X-Robots-Tag", "noindex")
 	}
 	method := func(allowed string, handle func()) {
 		// HEAD is served like GET; net/http drops the body.

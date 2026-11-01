@@ -11,6 +11,10 @@ handlers:
   secure: always
   static_files: robots.txt
   upload: robots\.txt
+- url: /sitemap\.xml
+  secure: always
+  static_files: sitemap.xml
+  upload: sitemap\.xml
 - url: /webnote/webnote_favicon\.ico
   secure: always
   static_files: webnote_favicon.ico

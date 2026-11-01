@@ -851,6 +851,36 @@ func TestHostRedirects(t *testing.T) {
 	}
 }
 
+// Only the home page at its address may be indexed.
+func TestRobotsHeader(t *testing.T) {
+	_, client := newTestClient(t)
+	s := newTestServer(client, time.Now())
+	for _, c := range []struct {
+		host, path string
+		noindex    bool
+	}{
+		{"www.aypwip.org", "/webnote/", false},
+		{"WWW.aypwip.org:443", "/webnote/", false},
+		{"20261031t000000-dot-webnote-184120.uc.r.appspot.com", "/webnote/", true},
+		{"localhost", "/webnote/", true},
+		{"www.aypwip.org", "/webnote/Sample%2520Workspace", true},
+		{"www.aypwip.org", "/webnote/Sample%2520Workspace.xml", true},
+		{"www.aypwip.org", "/webnote/load.py?name=x", true},
+		{"www.aypwip.org", "/webnote/rss.py?name=x", true},
+		{"www.aypwip.org", "/webnote/getrecent.py?name=x", true},
+		{"www.aypwip.org", "/webnote/no-such-page/x.y", true},
+	} {
+		r := httptest.NewRequest("GET", c.path, nil)
+		r.Host = c.host
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, r)
+		got := rec.Header().Get("X-Robots-Tag")
+		if want := map[bool]string{true: "noindex"}[c.noindex]; got != want {
+			t.Errorf("%s%s (%d): X-Robots-Tag %q, want %q", c.host, c.path, rec.Code, got, want)
+		}
+	}
+}
+
 func TestHostURLBehindAppEngine(t *testing.T) {
 	// App Engine's front end sets X-Forwarded-Proto; gunicorn turns it into
 	// the scheme, so production redirects to https.

@@ -1,11 +1,4 @@
 User-agent: *
-Crawl-delay: 30
+Disallow:
 
-User-agent: tailrank
-Disallow: /
-
-User-agent: Tailrank
-Disallow: /
-
-User-agent: Spinn3r
-Disallow: /
+Sitemap: https://www.aypwip.org/sitemap.xml

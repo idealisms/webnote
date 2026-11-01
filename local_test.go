@@ -22,6 +22,7 @@ func TestStaticFilesFromAppYAML(t *testing.T) {
 		"/webnote/FAQ.html":                   "", // redirected by the app
 		"/webnote/wp-layout.css":              "",
 		"/robots.txt":                         "robots.txt",
+		"/sitemap.xml":                        "sitemap.xml",
 		"/webnote/images/new.gif":             "images/new.gif",
 		"/favicon.ico":                        "webnote_favicon.ico",
 		"/webnote/icons/favicon.svg":          "icons/favicon.svg",
