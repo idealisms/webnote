@@ -2,13 +2,19 @@
 
   uv run --no-project --with zstandard python -I tools/audit_notes.py \\
       .data/notes_all [more dirs or .jsonl files] [--details .data/audit.jsonl] \\
-      [--jobs N]
+      [--notes-out .data/audit_notes.jsonl] [--jobs N]
 
 Reads dump_notes.py shards or sample_notes.py output, decodes each revision
 the way models.go does (zstd, else zlib, else raw JSON), unescape()s each
 note's text and counts what it contains. Prints counts only, never note text:
 notes can hold passwords. --details writes one line per workspace (SHA-1 key,
-not the name) with its categories, for follow-up.
+not the name) with its categories. --notes-out writes one line per note that
+has any category: the input file and line, revision, workspace key, note id
+and categories, so a follow-up can read just those revisions.
+
+The history note's version form (note id "load", built by the old client in
+d3ad97c^:webnote.js and saved with the workspace) has inline handlers; it's
+counted as app:history_form and removed before the rest of the text is checked.
 
 "Latest" is each workspace's newest revision in the input, i.e. what its page
 shows now if the input covers it; the rest is history.
@@ -44,10 +50,17 @@ JS_PATTERNS = {
 TAG = re.compile(r'<\s*/?\s*([a-z][a-z0-9]*)(?=[\s/>])')
 ENTITY = re.compile(r'&(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);')
 STYLE_ATTR = re.compile(r'<[a-z][^>]*\sstyle\s*=')
+# The old client's version form in the history note (see the docstring),
+# after lower().
+HISTORY_FORM = re.compile(
+    r'<div[^>]*>\s*<form[^>]*\saction=["\']?load\.py.*?</span>\s*</div>',
+    re.DOTALL)
 UNESCAPE = re.compile(r'%u([0-9A-Fa-f]{4})|%([0-9A-Fa-f]{2})')
 
 ATTRIBUTE_FORMATS = {
-    'id': re.compile(r'note\d+'),
+    # Plus the client's own notes (history, update and conflict warnings)
+    # and smoketest.py's.
+    'id': re.compile(r'note\d+|load|updated|conflict|smoketest'),
     'bgcolor': re.compile(r'#[0-9a-fA-F]{6}'),
     'xPos': re.compile(r'-?\d+(px)?'),
     'yPos': re.compile(r'-?\d+(px)?'),
@@ -82,6 +95,9 @@ def categories(text):
     """The set of categories found in one note's (unescaped) text."""
     found = set()
     lower = text.lower()
+    lower, n = HISTORY_FORM.subn('', lower)
+    if n:
+        found.add('app:history_form')
     # Also look through character references, e.g. java&#115;cript:.
     variants = {lower, html.unescape(lower)}
     for name, pattern in JS_PATTERNS.items():
@@ -106,15 +122,18 @@ def inputs(paths):
 
 def scan_revision(record):
     """Returns (format or error, notes, bad attributes, per-note category
-    counts, the revision's categories) for one dumped revision."""
+    counts, the revision's categories, [(note id, categories)] for notes
+    with any) for one dumped revision."""
     bad_attributes = collections.Counter()
     notes_with = collections.Counter()
+    flagged = []
     try:
         note_list, fmt = decode(record)
     except Exception as e:
-        return 'error:' + type(e).__name__, 0, bad_attributes, notes_with, set()
+        return ('error:' + type(e).__name__, 0, bad_attributes, notes_with,
+                set(), flagged)
     if not isinstance(note_list, list):
-        return 'error:not_a_list', 0, bad_attributes, notes_with, set()
+        return 'error:not_a_list', 0, bad_attributes, notes_with, set(), flagged
     found = set()
     for note in note_list:
         if not isinstance(note, dict):
@@ -130,19 +149,22 @@ def scan_revision(record):
         note_found = categories(js_unescape(text))
         notes_with.update(note_found)
         found |= note_found
-    return fmt, len(note_list), bad_attributes, notes_with, found
+        if note_found:
+            flagged.append((note.get('id'), sorted(note_found)))
+    return fmt, len(note_list), bad_attributes, notes_with, found, flagged
 
 
 def scan_file(path):
     """Scans one input file in a worker process: a list of
-    (id, workspace, time, scan_revision() result), one per revision."""
+    (id, workspace, time, line number, scan_revision() result), one per
+    revision."""
     results = []
     with open(path) as f:
-        for line in f:
+        for number, line in enumerate(f, 1):
             record = json.loads(line)
             workspace = record.get('workspace_key') or record.get('workspace')
             results.append((record['id'], workspace, record['time'] or '',
-                            scan_revision(record)))
+                            number, scan_revision(record)))
     return results
 
 
@@ -150,6 +172,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('paths', nargs='+')
     parser.add_argument('--details')
+    parser.add_argument('--notes-out')
     parser.add_argument('--jobs', type=int, default=8)
     args = parser.parse_args()
 
@@ -164,9 +187,12 @@ def main():
     seen = set()
 
     files = list(inputs(args.paths))
+    notes_out = open(args.notes_out, 'w') if args.notes_out else None
     with concurrent.futures.ProcessPoolExecutor(args.jobs) as pool:
-        for done, results in enumerate(pool.map(scan_file, files), 1):
-            for rid, workspace, time, (fmt, n, bad, note_counts, found) in results:
+        for done, (path, results) in enumerate(
+                zip(files, pool.map(scan_file, files)), 1):
+            for rid, workspace, time, number, scanned in results:
+                fmt, n, bad, note_counts, found, flagged = scanned
                 # The same revision can be in more than one input.
                 if rid in seen:
                     continue
@@ -185,8 +211,16 @@ def main():
                 key = (time, rid)
                 if workspace not in latest or key > latest[workspace][:2]:
                     latest[workspace] = key + (found,)
+                if notes_out:
+                    for note_id, cats in flagged:
+                        notes_out.write(json.dumps({
+                            'file': path, 'line': number, 'revision': rid,
+                            'workspace': workspace, 'time': time,
+                            'note': note_id, 'categories': cats}) + '\n')
             if done % 200 == 0:
                 print('%d/%d files' % (done, len(files)), file=sys.stderr)
+    if notes_out:
+        notes_out.close()
 
     latest_with = collections.Counter()
     for _, _, found in latest.values():
