@@ -52,6 +52,12 @@ const canonicalHost = "www.aypwip.org"
 
 var redirectHosts = map[string]bool{"aypwip.org": true, "test.aypwip.org": true}
 
+// Only GET and HEAD requests are redirected, and not pageFetches. Workspace
+// pages opened on an old host fetch relative URLs on it: a browser resends a
+// 301'd POST as a GET (so save.py got a 405 and the save was lost), and a
+// fetch can't read a cross-origin redirect without CORS headers.
+var pageFetches = map[string]bool{"/webnote/getrecent.py": true, "/webnote/getdates.py": true}
+
 var workspaceTemplate = template.Must(template.ParseFS(files, "templates/workspace.gotmpl"))
 
 func main() {
@@ -130,7 +136,12 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := utf8OrLatin1(r.URL.Path)
 	host, _, _ := strings.Cut(r.Host, ":")
 	host = strings.ToLower(host)
-	if redirectHosts[host] {
+	// The Apache version's CVS browser is gone; 410 tells crawlers to stop.
+	if path == "/cvs" || strings.HasPrefix(path, "/cvs/") {
+		http.Error(w, "410 Gone", http.StatusGone)
+		return
+	}
+	if redirectHosts[host] && (r.Method == "GET" || r.Method == "HEAD") && !pageFetches[path] {
 		target := r.URL.RequestURI()
 		if homeAliases[path] {
 			target = "/webnote/"

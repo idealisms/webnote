@@ -826,7 +826,8 @@ func TestHostRedirects(t *testing.T) {
 		{"GET", "AYPWIP.org:443", "/webnote/a%2520b?time=x", "https://www.aypwip.org/webnote/a%2520b?time=x"},
 		{"GET", "aypwip.org", "/webnote/a/b", "https://www.aypwip.org/webnote/a/b"},
 		{"GET", "aypwip.org", "/robots.txt", "https://www.aypwip.org/robots.txt"},
-		{"POST", "aypwip.org", "/webnote/save.py", "https://www.aypwip.org/webnote/save.py"},
+		{"HEAD", "test.aypwip.org", "/webnote/", "https://www.aypwip.org/webnote/"},
+		{"GET", "test.aypwip.org", "/webnote/load.py?name=x", "https://www.aypwip.org/webnote/load.py?name=x"},
 		{"GET", "www.aypwip.org", "/", "https://www.aypwip.org/webnote/"},
 		{"GET", "test.aypwip.org", "/", "https://www.aypwip.org/webnote/"},
 		{"GET", "test.aypwip.org", "/webnote/a%2520b?time=x", "https://www.aypwip.org/webnote/a%2520b?time=x"},
@@ -848,6 +849,60 @@ func TestHostRedirects(t *testing.T) {
 	s.ServeHTTP(rec, r)
 	if rec.Code != 200 {
 		t.Errorf("GET www.aypwip.org/webnote/: %d, want 200", rec.Code)
+	}
+}
+
+// A workspace page opened on an old host keeps working there: its saves
+// and fetches are served, not redirected.
+func TestOldHostsServePageRequests(t *testing.T) {
+	ctx, client := newTestClient(t)
+	s := newTestServer(client, time.Now())
+	for _, host := range []string{"test.aypwip.org", "aypwip.org"} {
+		r := httptest.NewRequest("POST", "/webnote/save.py", strings.NewReader("<workspace name='old host' nextNoteNum='1'></workspace>"))
+		r.Host = host
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, r)
+		if rec.Code != 200 {
+			t.Errorf("POST %s/webnote/save.py: %d %q, want 200", host, rec.Code, rec.Body.String())
+		}
+		for _, path := range []string{"/webnote/getrecent.py?name=old%20host", "/webnote/getdates.py?name=old%20host"} {
+			r := httptest.NewRequest("GET", path, nil)
+			r.Host = host
+			rec := httptest.NewRecorder()
+			s.ServeHTTP(rec, r)
+			if rec.Code != 200 {
+				t.Errorf("GET %s%s: %d, want 200", host, path, rec.Code)
+			}
+		}
+	}
+	if ws, err := getWorkspace(ctx, client, "old host"); ws == nil || err != nil {
+		t.Errorf("workspace not saved: %v, %v", ws, err)
+	}
+}
+
+// The Apache version's CVS browser is gone, on every host.
+func TestCVSGone(t *testing.T) {
+	_, client := newTestClient(t)
+	s := newTestServer(client, time.Now())
+	for _, c := range []struct{ host, path string }{
+		{"www.aypwip.org", "/cvs/index.pl/webnote/webnote.js.diff"},
+		{"www.aypwip.org", "/cvs"},
+		{"aypwip.org", "/cvs/index.pl/*checkout*/x?rev=1.2"},
+	} {
+		r := httptest.NewRequest("GET", c.path, nil)
+		r.Host = c.host
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, r)
+		if rec.Code != 410 {
+			t.Errorf("GET %s%s: %d, want 410", c.host, c.path, rec.Code)
+		}
+	}
+	r := httptest.NewRequest("GET", "/cvsfoo", nil)
+	r.Host = "www.aypwip.org"
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, r)
+	if rec.Code != 404 {
+		t.Errorf("GET /cvsfoo: %d, want 404", rec.Code)
 	}
 }
 
