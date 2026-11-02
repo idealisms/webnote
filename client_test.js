@@ -184,12 +184,15 @@ async function loadPolling() {
   const ws = ctx.workspace;
   ws.name = 'ws';
   ws.loadedTime = 100;
+  ws.clientVersion = 1;
   // The dialogs: showCollision() builds DOM, so it just opens its dialog.
   const collision = ctx.document.getElementById('collisionDialog');
   const conflict = ctx.document.getElementById('conflictDialog');
   ws.showCollision = () => { collision.open = true; };
-  const answer = async (status, text) => {
-    requests.shift().resolve({status, text: async () => text});
+  // client is the X-Webnote-Client header (the server's clientVersion).
+  const answer = async (status, text, client = '1') => {
+    const headers = {get: name => 'X-Webnote-Client' == name ? client : null};
+    requests.shift().resolve({status, headers, text: async () => text});
     await new Promise(setImmediate);
   };
   const fire = () => {
@@ -207,7 +210,7 @@ test('checkUpdated keeps one check going, through failures', async () => {
   ws.schedulePoll();
   fire();
   assert.equal(requests.length, 1);
-  assert.match(requests[0].url, /^getrecent\.py\?name=ws&epoch=1$/);
+  assert.match(requests[0].url, /^getrecent\.py\?name=ws&epoch=1&client=1$/);
   ws.checkUpdated();
   assert.equal(requests.length, 1, 'no second check while one is in flight');
   await answer(500, 'error');
@@ -262,7 +265,7 @@ test('save ignores clicks while a save is in flight', async () => {
   ws.save();
   ws.save();
   assert.equal(requests.length, 1, 'one save until the first answers');
-  assert.match(requests[0].url, /^save\.py\?epoch=1&loaded=100$/);
+  assert.match(requests[0].url, /^save\.py\?epoch=1&loaded=100&client=1$/);
   const alerts = [];
   globalThis.alert = message => alerts.push(message);
   await answer(500, 'error');
@@ -271,7 +274,79 @@ test('save ignores clicks while a save is in flight', async () => {
   // After an answer, saving works again.
   ws.save();
   assert.equal(requests.length, 1);
-  assert.match(requests[0].url, /loaded=100$/);
+  assert.match(requests[0].url, /loaded=100&client=1$/);
+});
+
+test('a newer client version asks to reload, and reloads only when hidden and safe', async () => {
+  const {ctx, ws, requests, answer, fire, collision} = await loadPolling();
+  let updated = 0, reloads = 0;
+  ws.showUpdated = () => { updated++; };
+  globalThis.location = {reload: () => { reloads++; }};
+  ctx.document.getElementById('saveImg').dataset = {};
+
+  // The same version, or none (an error page from the front end), is fine.
+  ws.checkUpdated();
+  await answer(200, '100');
+  fire();
+  await answer(500, 'error', null);
+  assert.ok(!ws.needsReload);
+  assert.equal(updated, 0);
+
+  // A newer one shows the banner once, even on an error, and keeps polling.
+  fire();
+  await answer(500, 'error', '2');
+  assert.ok(ws.needsReload);
+  assert.equal(updated, 1);
+  fire();
+  await answer(200, '100', '2');
+  assert.equal(updated, 1);
+  assert.ok(!collision.open);
+  assert.equal(reloads, 0, 'a visible page never reloads by itself');
+
+  // Hidden: only once nothing would be lost.
+  ctx.document.visibilityState = 'hidden';
+  for (const [state, undo] of [
+    [() => { ws.changed = true; }, () => { ws.changed = false; }],
+    [() => { ws.edit = {}; }, () => { ws.edit = ''; }],
+    [() => { ws.mouse.selObj = {}; }, () => { delete ws.mouse.selObj; }],
+    [() => { get('saveImg').dataset.state = 'saving'; }, () => { get('saveImg').dataset.state = ''; }],
+  ]) {
+    state();
+    ws.reloadIfHidden();
+    assert.equal(reloads, 0);
+    undo();
+  }
+  ws.reloadIfHidden();
+  assert.equal(reloads, 1);
+
+  function get(id) { return ctx.document.getElementById(id); }
+});
+
+test('a save or a late answer can find the page out of date while hidden', async () => {
+  const {ctx, ws, requests, answer} = await loadPolling();
+  let reloads = 0;
+  ws.showUpdated = () => {};
+  globalThis.location = {reload: () => { reloads++; }};
+  const saveImg = ctx.document.getElementById('saveImg');
+  saveImg.className = 'controls';
+  saveImg.dataset = {};
+  ws.editOff = () => {};
+  ws.toString = () => '<workspace/>';
+  ws.setSaveState = state => { saveImg.dataset.state = state; };
+  ws.changed = true;
+  ws.save();
+  globalThis.alert = () => {};
+  await answer(500, 'error', '2');  // saveCallback needs DOMParser
+  assert.ok(ws.needsReload, 'a save response counts, whatever its status');
+  assert.equal(reloads, 0, 'visible');
+
+  // With the changes saved after all, a late poll answer reloads.
+  ws.changed = false;
+  ws.needsReload = false;
+  ws.checkUpdated();
+  ctx.document.visibilityState = 'hidden';
+  await answer(200, '200', '2');
+  assert.equal(reloads, 1, 'the answer came after the tab was hidden');
 });
 
 test('reportErrors sends each error once, at most 5, without the page URL', async () => {

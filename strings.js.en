@@ -62,6 +62,8 @@ var strings = {
   CONFLICT_SAVE_ANYWAY: 'Save mine anyway',
   CONFLICT_RELOAD: 'Load their version (discard my changes)',
   CONFLICT_KEEP_EDITING: 'Keep editing',
+  UPDATED_WARNING: 'Webnote has been updated.',
+  UPDATED_RELOAD: 'Reload',
   DIALOG_CLOSE: 'Close',
   
   SAVE_TOO_LARGE: 'Failed to save notes.  This workspace is too large to save.  Delete some notes or move them to another workspace, then try again.',

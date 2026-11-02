@@ -272,6 +272,13 @@ dialog.collision {
   margin: 0 auto;
   padding: 8px 10px;
 }
+/* Webnote was updated: at the bottom, so it doesn't cover the collision
+   warning. */
+dialog.collision.updated {
+  top: auto;
+  bottom: 8px;
+  background: #ffd75e;
+}
 dialog.collision button.closeDialog {
   float: right;
   margin: -4px -4px 0 8px;

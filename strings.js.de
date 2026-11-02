@@ -62,6 +62,8 @@ var strings = {
   CONFLICT_SAVE_ANYWAY: 'Meine trotzdem speichern',
   CONFLICT_RELOAD: 'Die neuere Version laden (meine \u00C4nderungen verwerfen)',
   CONFLICT_KEEP_EDITING: 'Weiter bearbeiten',
+  UPDATED_WARNING: 'Webnote wurde aktualisiert.',
+  UPDATED_RELOAD: 'Neu laden',
   DIALOG_CLOSE: 'Schlie\u00DFen',
   
   SAVE_TOO_LARGE: 'Speichern der Notizen ist fehlgeschlagen.  Dieser Arbeitsplatz ist zu gro\u00DF zum Speichern.  L\u00F6sche einige Notizen oder verschiebe sie auf einen anderen Arbeitsplatz und versuche es erneut.',

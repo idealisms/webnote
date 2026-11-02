@@ -491,7 +491,8 @@ var fixedSincePython = map[string]fixedResponse{
 // stringsSincePython are changes to strings.js since the port, applied to
 // Python's responses: times are shown in the browser's time zone, the
 // history's error, the save conflict warning and the too-large save error
-// are new, and the collision warning is plain text.
+// are new, the collision warning is plain text, and the banner for a new
+// client version is new.
 var stringsSincePython = strings.NewReplacer(
 	"  SAVE_STATUS_ERROR: 'Failed", "  SAVE_TOO_LARGE: 'Failed to save notes.  This workspace is too large to save.  Delete some notes or move them to another workspace, then try again.',\n"+
 		"  SAVE_STATUS_ERROR: 'Failed",
@@ -516,6 +517,8 @@ var stringsSincePython = strings.NewReplacer(
   CONFLICT_SAVE_ANYWAY: 'Save mine anyway',
   CONFLICT_RELOAD: 'Load their version (discard my changes)',
   CONFLICT_KEEP_EDITING: 'Keep editing',
+  UPDATED_WARNING: 'Webnote has been updated.',
+  UPDATED_RELOAD: 'Reload',
   DIALOG_CLOSE: 'Close',
 `,
 	"  COLLISION_WARNING: \"Dieser Arbeitsplatz wurde von jemand anderem ver\\u00E4ndert w\\u00E4hrend Du daran gearbeitet hast. Wenn Du sehen willst wie der Arbeitsplatz jetzt aussieht, kannst Du den<a href='$1' target='_new'>Arbeitsplatz in einem neuen Fenster \\u00F6ffnen</a>.\",\n",
@@ -526,6 +529,8 @@ var stringsSincePython = strings.NewReplacer(
   CONFLICT_SAVE_ANYWAY: 'Meine trotzdem speichern',
   CONFLICT_RELOAD: 'Die neuere Version laden (meine \u00C4nderungen verwerfen)',
   CONFLICT_KEEP_EDITING: 'Weiter bearbeiten',
+  UPDATED_WARNING: 'Webnote wurde aktualisiert.',
+  UPDATED_RELOAD: 'Neu laden',
   DIALOG_CLOSE: 'Schlie\u00DFen',
 `,
 )
@@ -1424,5 +1429,48 @@ func TestParseInt(t *testing.T) {
 	}
 	if _, err := parseInt("99999999999999999999"); !errors.Is(err, strconv.ErrRange) {
 		t.Errorf("parseInt past int64: %v, want ErrRange", err)
+	}
+}
+
+// Every save.py and getrecent.py response says which client the server
+// expects, whatever its status, and the page knows its own.
+func TestClientVersionHeader(t *testing.T) {
+	_, client := newTestClient(t)
+	s := newTestServer(client, time.Now())
+	s.now = time.Now
+	want := strconv.Itoa(clientVersion)
+	for _, c := range []struct {
+		method, path, body string
+		status             int
+	}{
+		{"POST", "/webnote/save.py?epoch=1&client=1", "<workspace name='cv' nextNoteNum='1'><note noteid='n'>x</note></workspace>", 200},
+		{"POST", "/webnote/save.py?epoch=1&loaded=0", "<workspace name='cv' nextNoteNum='1'><note noteid='n'>x</note></workspace>", 409},
+		{"POST", "/webnote/save.py", "", 400},
+		{"GET", "/webnote/save.py", "", 405},
+		{"GET", "/webnote/getrecent.py?name=cv&epoch=1&client=1", "", 200},
+		{"GET", "/webnote/getrecent.py?name=nosuch", "", 200},
+		{"GET", "/webnote/getrecent.py", "", 200},
+		{"HEAD", "/webnote/getrecent.py?name=cv", "", 200},
+	} {
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, httptest.NewRequest(c.method, c.path, strings.NewReader(c.body)))
+		if rec.Code != c.status {
+			t.Errorf("%s %s: status %d, want %d", c.method, c.path, rec.Code, c.status)
+		}
+		if got := rec.Header().Get(clientVersionHeader); got != want {
+			t.Errorf("%s %s: %s %q, want %q", c.method, c.path, clientVersionHeader, got, want)
+		}
+	}
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest("GET", "/webnote/cv", nil))
+	if line := "\n  workspace.clientVersion = " + want + ";\n"; !strings.Contains(rec.Body.String(), line) {
+		t.Errorf("page lacks %q", line)
+	}
+	for _, path := range []string{"/webnote/getdates.py?name=cv", "/webnote/cv", "/webnote/cv.xml"} {
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if got := rec.Header().Get(clientVersionHeader); got != "" {
+			t.Errorf("GET %s: %s %q, want none", path, clientVersionHeader, got)
+		}
 	}
 }

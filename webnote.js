@@ -1167,6 +1167,13 @@ export const workspace =
    * doesn't bring it back for the same save.
    */
   warnedTime: 0,
+  /**
+   * The client version this page was served with (clientVersion in
+   * server.go, set by the page), and whether a save.py or getrecent.py
+   * response has since asked for a newer one.
+   */
+  clientVersion: 0,
+  needsReload: false,
 
   /**
    * Create a new note. Any of the parameter values may be left blank
@@ -1608,7 +1615,8 @@ export const workspace =
       workspace.schedulePoll();
     };
     fetch('getrecent.py?name=' + escape(myescape(this.name))
-          + '&epoch=1').then(function(response) {
+          + '&epoch=1&client=' + this.clientVersion).then(function(response) {
+      workspace.checkClientVersion(response);
       if (200 != response.status) {
         failed(response.status);
         return;
@@ -1633,6 +1641,60 @@ export const workspace =
       db('no changes');
       this.schedulePoll();
     }
+  },
+
+  /**
+   * Note the client version in a save.py or getrecent.py response.  A newer
+   * one means this page is out of date (the server reads or stores notes
+   * differently): say so in a banner, and reload the page when it's hidden,
+   * if that loses nothing (see reloadIfHidden).  Pages loaded before the
+   * server sent a version can't tell; the server copes with them.
+   */
+  checkClientVersion : function(response) {
+    const version = Number(response.headers.get('X-Webnote-Client'));
+    if (this.needsReload || !(version > this.clientVersion))
+      return;
+    this.needsReload = true;
+    this.showUpdated();
+    // The answer may come after the tab was hidden.
+    this.reloadIfHidden();
+  },
+
+  /**
+   * Can the page reload without losing anything?  Not with unsaved
+   * changes, a note being edited (its text isn't in changed until editing
+   * stops), dragged or resized, or a save in flight.
+   */
+  canReload : function() {
+    return !this.changed && !this.edit && !this.mouse.selObj
+        && 'saving' != get('saveImg').dataset.state;
+  },
+
+  /**
+   * Reload an out-of-date page while it's hidden, so the user doesn't see
+   * it.  With nothing unsaved, the notes come back where they were.  A page
+   * that can't reload yet tries again the next time it's hidden.
+   */
+  reloadIfHidden : function() {
+    if (this.needsReload && 'hidden' == document.visibilityState && this.canReload())
+      location.reload();
+  },
+
+  /**
+   * Say that Webnote was updated, in a banner like the collision warning.
+   * Reload asks first if there are unsaved changes (winBeforeUnload).
+   */
+  showUpdated : function() {
+    const reload = dialogButton(strings.UPDATED_RELOAD, function() { location.reload(); });
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'closeDialog';
+    close.textContent = '\u00d7';
+    close.title = strings.DIALOG_CLOSE;
+    close.setAttribute('aria-label', strings.DIALOG_CLOSE);
+    close.addEventListener('click', function() { get('updatedDialog').close(); });
+    showDialog('updatedDialog', 'collision updated', false,
+               [close, strings.UPDATED_WARNING + ' ', reload]);
   },
 
   /**
@@ -1754,8 +1816,9 @@ export const workspace =
       alert(strings.SAVE_STATUS_ERROR);
       workspace.setSaveState('');
     };
-    fetch('save.py?epoch=1&loaded=' + this.loadedTime,
+    fetch('save.py?epoch=1&loaded=' + this.loadedTime + '&client=' + this.clientVersion,
           {method: 'POST', body: workspace.toString()}).then(function(response) {
+      workspace.checkClientVersion(response);
       // 409 (conflict) and 413 (too large) explain themselves in the body.
       if (200 != response.status && 409 != response.status && 413 != response.status) {
         db(response.status);
@@ -1875,9 +1938,12 @@ export function init()
 
   // periodically check for updates (every 10 minutes)
   workspace.schedulePoll();
-  // A hidden tab skips its check; check when it's shown again.
+  // A hidden tab skips its check; check when it's shown again.  An
+  // out-of-date page reloads when hidden.
   document.addEventListener('visibilitychange', function() {
-    if ('visible' == document.visibilityState && !workspace.pollTimer)
+    if ('hidden' == document.visibilityState)
+      workspace.reloadIfHidden();
+    else if (!workspace.pollTimer)
       workspace.checkUpdated();
   });
 }

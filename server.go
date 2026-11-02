@@ -187,8 +187,10 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/webnote/strings.js":
 		method("GET", func() { s.strings(req) })
 	case "/webnote/save.py":
+		w.Header().Set(clientVersionHeader, clientVersionStr)
 		method("POST", func() { s.saveHandler(req) })
 	case "/webnote/getrecent.py":
+		w.Header().Set(clientVersionHeader, clientVersionStr)
 		method("GET", func() { s.getRecent(req) })
 	case "/webnote/getdates.py":
 		method("GET", func() { s.getDates(req) })
@@ -411,6 +413,19 @@ func (s *server) notesJSON(req *request, ws *Workspace) (json.RawMessage, error)
 	return ws.notesList(req.r.Context(), s.client, req.params.get("time"))
 }
 
+// clientVersion is the version of the client (webnote.js and the stored
+// format it reads and writes). Bump it when pages already open must reload
+// to keep working with this server, such as a change to how note text is
+// stored; most deploys leave it alone. Every save.py and getrecent.py
+// response sends it in clientVersionHeader, and a page served with a lower
+// one asks to reload (see Workspace.checkClientVersion in webnote.js).
+// Pages send theirs as the client parameter, which only the logs use.
+const clientVersion = 1
+
+const clientVersionHeader = "X-Webnote-Client"
+
+var clientVersionStr = strconv.Itoa(clientVersion)
+
 type pageValues struct {
 	NameJS, NameHTML, NotesJS string
 	// FeedURL is the workspace's RSS feed, escaped twice like the links
@@ -422,6 +437,8 @@ type pageValues struct {
 	// Version is the deployed version, so a new page doesn't run scripts
 	// cached from an older one.
 	Version string
+	// ClientVersion is clientVersion when the page was served.
+	ClientVersion int
 }
 
 func (s *server) load(req *request, pathName string, fromPath bool) {
@@ -439,6 +456,8 @@ func (s *server) load(req *request, pathName string, fromPath bool) {
 		NotesJS:    "[]",
 		LoadedTime: "0",
 		Version:    url.QueryEscape(s.version),
+
+		ClientVersion: clientVersion,
 	}
 	ws, err := getWorkspace(req.r.Context(), s.client, name)
 	if err != nil {

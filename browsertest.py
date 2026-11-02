@@ -582,7 +582,7 @@ def run_ui(browser, base, name):
                          body='<return><status value="conflict" update="%d"/></return>' % newer)
     page.click('#saveImg')
     page.wait_for_selector('#conflictDialog[open]')
-    check(saves[-1].endswith('save.py?epoch=1&loaded=%d' % loaded)
+    check(saves[-1].endswith('save.py?epoch=1&loaded=%d&client=1' % loaded)
           and not dialog_open(page, 'collisionDialog')
           and page.evaluate('strings.COLLISION_WARNING') not in save_bodies[-1],
           'a save sends loadedTime, the banner isn\'t saved, and a conflict replaces it')
@@ -621,7 +621,7 @@ def run_ui(browser, base, name):
     page.wait_for_function("get('saveImg').dataset.state == ''")
     check(page.evaluate('saveStates') == ['saving', 'saved', ''],
           'the save icon animates, shows a check, then goes back')
-    check(saves[-1].endswith('&loaded=%d' % newer) and "noteid='conflict'" not in save_bodies[-1]
+    check(saves[-1].endswith('&loaded=%d&client=1' % newer) and "noteid='conflict'" not in save_bodies[-1]
           and page.evaluate('workspace.loadedTime') == newer + 1
           and not dialog_open(page, 'conflictDialog'),
           'save anyway saves from the newer revision, without the warning note')
@@ -656,6 +656,47 @@ def run_ui(browser, base, name):
           and urllib.parse.urlsplit(page.url).path not in beacon.value.post_data,
           'an uncaught error is reported, without the page URL (%r)' % report)
     problems[:] = [p for p in problems if 'browsertest error' not in p]
+
+    # A newer client version on the server: a banner, and a reload once the
+    # tab is hidden with nothing unsaved (visibility is faked).
+    page.unroute('**/getrecent.py*')
+    recent_urls = []
+    def on_recent(route):
+        recent_urls.append(route.request.url)
+        route.fulfill(body=str(page_loaded), headers={'X-Webnote-Client': '2'})
+    page_loaded = page.evaluate('workspace.loadedTime')
+    page.route('**/getrecent.py*', on_recent)
+    page.evaluate('window.notReloaded = true; workspace.checkUpdated()')
+    page.wait_for_selector('#updatedDialog[open]')
+    check(recent_urls[-1].endswith('&epoch=1&client=1')
+          and page.evaluate('workspace.clientVersion') == 1, 'the page sends its client version')
+    check(not page.evaluate("get('updatedDialog').matches(':modal')")
+          and not dialog_open(page, 'collisionDialog')
+          and page.locator('#updatedDialog').get_by_role(
+              'button', name=page.evaluate('strings.UPDATED_RELOAD'), exact=True).count() == 1,
+          'a newer client version shows a banner with a reload button')
+    set_visibility = """state => {
+        Object.defineProperty(document, 'visibilityState', {value: state, configurable: true});
+        document.dispatchEvent(new Event('visibilitychange'));
+    }"""
+    page.evaluate(set_visibility, 'hidden')
+    page.wait_for_timeout(300)
+    check(page.evaluate('window.notReloaded === true'),
+          'a hidden page with unsaved changes doesn\'t reload')
+    page.evaluate(set_visibility, 'visible')
+    page.wait_for_timeout(300)
+    check(page.evaluate('window.notReloaded === true') and dialog_open(page, 'updatedDialog'),
+          'nor does a visible one')
+    page.evaluate('workspace.changed = false')
+    del dialogs[:]
+    with page.expect_navigation():
+        page.evaluate(set_visibility, 'hidden')
+    page.wait_for_function("typeof workspace != 'undefined' && workspace.name")
+    check(not dialogs and page.evaluate('workspace.name') == name
+          and not page.evaluate('workspace.needsReload') and not dialog_open(page, 'updatedDialog'),
+          'with nothing unsaved, hiding the tab reloads it without asking')
+    page.unroute('**/getrecent.py*')
+    page.click('#newImg')
 
     check(len(saves) == 9, 'only the failed and conflicting saves were tried')
     check(not dialogs and not problems, 'no other alerts or JavaScript errors%s' % (
