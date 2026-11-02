@@ -121,7 +121,7 @@ def save(base, name, text):
 def check_static(base):
     print('static pages')
     check(fetch_status_no_redirect(base + '/') == 301, '/ redirects')
-    for path in ('/webnote/', '/webnote/webnote.js', '/webnote/objects.js',
+    for path in ('/webnote/', '/webnote/webnote.js', '/webnote/objects.js', '/webnote/markdown.js',
                  '/webnote/style.css', '/webnote/strings.js'):
         status, _ = fetch(base + path)
         check(status == 200, '%s returns 200 (got %s)' % (path, status))

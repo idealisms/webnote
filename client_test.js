@@ -34,32 +34,151 @@ async function load() {
   return {...objects, ...webnote, window, document};
 }
 
-test('getHTML: line breaks and headings', async () => {
+// markdown.js has no state and no DOM; decode stands in for the page's
+// decodeCharRefs().
+const markdown = import(pathToFileURL(path.join(__dirname, 'markdown.js')).href);
+const NAMED = {amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0'};
+const decode = s => s.replace(/&(?:#(\d+)|#x([0-9a-f]+)|(\w+));/gi, (ref, dec, hex, name) =>
+  dec ? String.fromCodePoint(Number(dec)) : hex ? String.fromCodePoint(parseInt(hex, 16))
+      : NAMED[name] || ref);
+
+test('getHTML renders the note with markdown.js', async () => {
   const {Note} = await load();
   const html = text => Note.prototype.getHTML.call({text});
-  assert.equal(html(''), '');
-  assert.equal(html('a\nb'), 'a<br />b');
-  assert.equal(html('a\\\nb'), 'ab', 'a backslash joins lines');
-  assert.equal(html('x ! y'), 'x ! y');
-  assert.equal(html('<b>bold</b>'), '<b>bold</b>', 'notes are HTML');
-  // More !s make a bigger heading, up to h1. Quirk, pinned: the heading
-  // keeps its line's <br>.
-  assert.equal(html('!h3\n!!h2\n!!!h1\n!!!!h1'),
-               '<h3>h3<br /></h3><h2>h2<br /></h2><h1>h1<br /></h1><h1>h1</h1>');
+  assert.equal(html('**a**\n<b>b</b>'), '<strong>a</strong><br /><strong>b</strong>');
 });
 
-test('getHTML: links', async () => {
-  const {Note} = await load();
-  const html = text => Note.prototype.getHTML.call({text});
-  const link = url => '<a href="' + url + '">' + url + '</a>';
+test('markdown: lines, the wiki syntax and blocks', async () => {
+  const {renderNote} = await markdown;
+  const html = text => renderNote(text, decode);
+  assert.equal(html(''), '');
+  assert.equal(html('a\nb'), 'a<br />b');
+  assert.equal(html('a\n\nb'), 'a<br /><br />b', 'blank lines show');
+  assert.equal(html('a\\\nb'), 'ab', 'a backslash joins lines');
+  assert.equal(html('x ! y'), 'x ! y');
+  // Wiki headings: more !s are bigger, up to h1.
+  assert.equal(html('!h3\n!!h2\n!!!h1\n!!!!h1'), '<h3>h3</h3><h2>h2</h2><h1>h1</h1><h1>h1</h1>');
+  assert.equal(html('# one\n### three ###\n#tag\n#'), '<h1>one</h1><h3>three</h3>#tag<br />#');
+  // Before and after a block, a blank line still shows.
+  assert.equal(html('a\n# h\nb'), 'a<br /><h1>h</h1>b');
+  assert.equal(html('a\n\n# h\n\nb'), 'a<br /><br /><h1>h</h1><br />b');
+  assert.equal(html('- a\n- b\n  - c\n    d\n* e'),
+               '<ul><li>a</li><li>b<ul><li>c<br />d</li></ul></li><li>e</li></ul>');
+  assert.equal(html('3. x\n4. y\n- z'), '<ol start="3"><li>x</li><li>y</li></ol><ul><li>z</li></ul>');
+  assert.equal(html('- a\n\n- b'), '<ul><li>a</li></ul><br /><ul><li>b</li></ul>',
+               'a blank line ends a list');
+  assert.equal(html('-5 degrees\n1.5 cups'), '-5 degrees<br />1.5 cups');
+  assert.equal(html('> q\n>\n> > qq\nafter'),
+               '<blockquote>q<br /><br /><blockquote>qq</blockquote></blockquote>after');
+  assert.equal(html('>>> x\n>next'), '&gt;&gt;&gt; x<br />&gt;next', 'arrows aren\'t quotes');
+  assert.equal(html('---\n* * *'), '<hr /><hr />');
+  assert.equal(html('```\n<b>x</b> **y**\n```\nz'),
+               '<pre><code><strong>x</strong> **y**</code></pre>z'.replace('<strong>x</strong>', '**x**'),
+               'code blocks are text (legacy <b> still converts first)');
+  assert.equal(html('```\nunclosed'), '<pre><code>unclosed</code></pre>');
+});
+
+test('markdown: inline', async () => {
+  const {renderNote} = await markdown;
+  const html = text => renderNote(text, decode);
+  assert.equal(html('**b** __b__ *i* _i_ ***bi*** ~~s~~'),
+               '<strong>b</strong> <strong>b</strong> <em>i</em> <em>i</em> '
+               + '<strong><em>bi</em></strong> <del>s</del>');
+  assert.equal(html('*a **b** c*'), '<em>a <strong>b</strong> c</em>');
+  assert.equal(html('snake_case_name 2 * 3 * 4 ** x'), 'snake_case_name 2 * 3 * 4 ** x');
+  assert.equal(html('**unclosed and * lone'), '**unclosed and * lone');
+  assert.equal(html('`a*b*` ``x`y``'), '<code>a*b*</code> <code>x`y</code>');
+  assert.equal(html('\\*not\\* \\[x\\](y) C:\\dir'), '*not* [x](y) C:\\dir');
+  assert.equal(html('<x> & "q" \'s\''), '&lt;x&gt; &amp; &quot;q&quot; &#39;s&#39;');
+});
+
+test('markdown: links and images', async () => {
+  const {renderNote} = await markdown;
+  const html = text => renderNote(text, decode);
+  const link = (url, text = url) => '<a href="' + url + '">' + text + '</a>';
   assert.equal(html('http://e.com/start'), link('http://e.com/start'));
   assert.equal(html('see https://e.com/s. ok'), 'see ' + link('https://e.com/s') + '. ok');
   assert.equal(html('a\tftp://e.com/f'), 'a\t' + link('ftp://e.com/f'));
   assert.equal(html('line\nhttp://e.com/x'), 'line<br />' + link('http://e.com/x'));
-  assert.equal(html('http://e.com/a?x=1&y=2 z'), link('http://e.com/a?x=1&y=2') + ' z');
+  assert.equal(html('http://e.com/a?x=1&y=2 z'), link('http://e.com/a?x=1&amp;y=2') + ' z');
   assert.equal(html('nohttp://e.com mailto:x@e.com'), 'nohttp://e.com mailto:x@e.com');
   // Quirk, pinned: a fragment swallows a trailing '.'.
   assert.equal(html('http://e.com/a#frag. x'), link('http://e.com/a#frag.') + ' x');
+  assert.equal(html('[t **b**](https://e.com/(a)) [m](mailto:x@e.com "title")'),
+               link('https://e.com/(a)', 't <strong>b</strong>') + ' ' + link('mailto:x@e.com', 'm'));
+  assert.equal(html('<https://e.com/x> [https://e.com/in](https://e.com/out)'),
+               link('https://e.com/x') + ' ' + link('https://e.com/out', 'https://e.com/in'),
+               'no links in links');
+  assert.equal(html('![a "b"](https://e.com/i.png)'), '<img src="https://e.com/i.png" alt="a &quot;b&quot;" />');
+  assert.equal(html('[![i](https://e.com/i.png)](https://e.com/)'),
+               link('https://e.com/', '<img src="https://e.com/i.png" alt="i" />'));
+  // Only web addresses: anything else stays text.
+  for (const bad of ['[x](javascript:alert(1))', '[x](JaVaScRiPt:alert(1))', '[x](/relative)',
+                     '[x](data:text/html,hi)', '<javascript:alert(1)>',
+                     '[x](java&#115;cript:alert(1))']) {
+    assert.ok(!/<a |<img /.test(html(bad)), bad + ' -> ' + html(bad));
+  }
+  assert.equal(html('![x](ftp://e.com/i.png)'), '!' + link('ftp://e.com/i.png', 'x'),
+               'images need http(s), so this is a link');
+  assert.equal(html('[a ]b](https://e.com) [\\[1](https://e.com)'),
+               '[a ]b](https://e.com) ' + link('https://e.com', '[1'));
+  // An image at the start of a line isn't a wiki heading.
+  assert.equal(html('![i](https://e.com/i.png) x'), '<img src="https://e.com/i.png" alt="i" /> x');
+});
+
+test('markdown: the HTML notes could hold before', async () => {
+  const {legacyToMarkdown, renderNote} = await markdown;
+  const md = text => legacyToMarkdown(text, decode);
+  assert.equal(md('<b>b</b> <STRONG>s</STRONG> <i>i</i> <em> e </em> <u>u</u> <s>x</s> <code>c</code>'),
+               '**b** **s** *i*  *e*  u ~~x~~ `c`');
+  assert.equal(md('a<br>b<BR/>c<br />d'), 'a\nb\nc\nd');
+  assert.equal(md('<a href="https://e.com/a b">t [1]</a> <a href=http://e.com>http://e.com</a> <a href="https://e.com/"></a>'),
+               '[t [1]](https://e.com/a%20b) <http://e.com> <https://e.com/>');
+  assert.equal(md('<a href="javascript:alert(1)">t</a> <a href="/rel" onclick="x()">r</a>'), 't r');
+  assert.equal(md('<a href="https://e.com"><img src="https://e.com/i.png" alt="i"></a>'),
+               '[![i](https://e.com/i.png)](https://e.com)');
+  assert.equal(md('<img src="https://e.com/i.png" onerror="alert(1)"> <img src=x onerror=alert(1)>'),
+               '![](https://e.com/i.png) ');
+  assert.equal(md('<p>one</p><p>two</p><div>three</div>'), 'one\ntwo\nthree\n');
+  assert.equal(md('<h1>big</h1><ul><li>a<li>b</ul><hr>end'), '# big\n- a\n- b\n---\nend');
+  assert.equal(md('x<script>alert("<b>")</script>y<style>p{}</style>z<!-- c -->!'), 'xyz!');
+  assert.equal(md('<html><head><title>t</title></head><body><font color=red>hi</font></body></html>'),
+               'hi\n');
+  assert.equal(md('&nbsp;caf&#233; &lt;b&gt; <span title="a>b">x</span>'), '\u00a0café <b> x');
+  // Text that only looks like HTML stays.
+  assert.equal(md('<customer> <brand name> a < b > c <http://e.com> <o:p></o:p>'),
+               '<customer> <brand name> a < b > c <http://e.com> ');
+  assert.equal(md('unclosed <b>bold <a href="https://e.com">link <script>x'),
+               'unclosed <b>bold <a href="https://e.com">link <script>x');
+  assert.equal(md('<b>a</b'), '<b>a</b', 'an incomplete tag is text');
+  assert.equal(md('<a href="https://e.com">x] [y \\</a>'), '[x\\] \\[y \\\\](https://e.com)');
+  assert.equal(renderNote('<a href="https://e.com">x] [y \\</a>', decode),
+               '<a href="https://e.com">x] [y \\</a>');
+  assert.equal(md('<a href="https://e.com/>t</a>'), '<a href="https://e.com/>t',
+               'an unclosed quote makes it text (a stray closing tag goes)');
+  assert.equal(md('<b>a\nb</b>'), 'a\nb', 'no emphasis across lines');
+  // Whatever it was, the result renders safely.
+  for (const evil of ['<img src=x onerror=alert(1)>', '<svg onload=alert(1)>', '<script>alert(1)',
+                      '<a href="javascript:alert(1)">x</a>', '<iframe src="https://e.com">',
+                      '&lt;script&gt;alert(1)&lt;/script&gt;', '<meta http-equiv=refresh content="0;url=https://e.com">',
+                      '<scr<script>ipt>alert(1)</script>', '<<b>script>x</b>']) {
+    const out = renderNote(evil, decode);
+    assert.ok(!/<(?!\/?(?:strong|em|del|code|pre|br|a href="https?:|h[1-6]|ul|ol|li|blockquote|hr|img src="https?:))/i.test(out),
+              evil + ' -> ' + out);
+  }
+});
+
+test('markdown: large and nested notes stay fast', async () => {
+  const {renderNote} = await markdown;
+  for (const text of ['*a '.repeat(20000), '[a '.repeat(20000) + ']', '`'.repeat(20000),
+                      '<b>'.repeat(20000), '<a href="https://e.com">'.repeat(5000), '> '.repeat(5000) + 'x',
+                      '- '.repeat(5000) + 'x', ('  '.repeat(200) + '- x\n').repeat(200),
+                      '**'.repeat(20000) + 'x', '_a '.repeat(20000) + '_', '<!--'.repeat(10000),
+                      '*'.repeat(30) + 'x' + '*'.repeat(30), 'http://e.com/' + 'a'.repeat(100000)]) {
+    const start = Date.now();
+    renderNote(text, decode);
+    assert.ok(Date.now() - start < 1000, text.slice(0, 20) + '...: ' + (Date.now() - start) + ' ms');
+  }
 });
 
 test('charRefs stores characters 160-255 as references', async () => {

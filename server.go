@@ -420,7 +420,9 @@ func (s *server) notesJSON(req *request, ws *Workspace) (json.RawMessage, error)
 // response sends it in clientVersionHeader, and a page served with a lower
 // one asks to reload (see Workspace.checkClientVersion in webnote.js).
 // Pages send theirs as the client parameter, which only the logs use.
-const clientVersion = 1
+//
+// 2 (2026-11-01): notes are Markdown, rendered by markdown.js.
+const clientVersion = 2
 
 const clientVersionHeader = "X-Webnote-Client"
 

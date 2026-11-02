@@ -1141,7 +1141,7 @@ func TestEpochTimes(t *testing.T) {
 	page := do("GET", "/webnote/ws", "")
 	for _, want := range []string{
 		"workspace.loadedTime = " + secondUs + ";",
-		`src="strings.js?v=v1"`, `"./objects.js": "./objects.js?v=v1"`, `"./webnote.js": "./webnote.js?v=v1"`,
+		`src="strings.js?v=v1"`, `"./objects.js": "./objects.js?v=v1"`, `"./webnote.js": "./webnote.js?v=v1"`, `"./markdown.js": "./markdown.js?v=v1"`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page doesn't contain %q", want)

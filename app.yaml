@@ -46,6 +46,10 @@ handlers:
   secure: always
   static_files: webnote.js
   upload: webnote\.js
+- url: /webnote/markdown\.js
+  secure: always
+  static_files: markdown.js
+  upload: markdown\.js
 - url: /webnote/images
   secure: always
   static_dir: images

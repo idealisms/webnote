@@ -9,6 +9,7 @@
  */
 
 import {Color, MyDate, Point, db, findRelativeMousePos, get, myescape, rememberWorkspace} from './objects.js';
+import {renderNote} from './markdown.js';
 
 // global variables
 // user options
@@ -459,40 +460,13 @@ Note.prototype.setColor = function(hex, ignoreHistory)
   get('m' + this.id).style.background = this.bgColor;
 }
 /**
- * Convert the text of a note to html.  We perform a simple transform of
- * newlines into <br/> and ! into headings.  Other wiki/textile like
- * transforms would happen here.
+ * The note's text as HTML: Markdown, the old wiki syntax and the HTML notes
+ * could hold before (see markdown.js). Stored text is never parsed as HTML.
  * @type string
  */
-Note.prototype.getHTML = function() // wikification
+Note.prototype.getHTML = function()
 {
-  let sCopy = this.text.replace(/\n/g,"<br />\n");
-  sCopy = sCopy.replace(/\\<br \/>\n/g,"\n");
-
-  // Turn URLs into links: at the start of the text or after whitespace,
-  // which stays (a newline here is the end of a line).
-  sCopy = sCopy.replace(/(^|\s)((https?|ftp)(:\/\/[-a-zA-Z0-9%.~:_\/]+[a-zA-Z\/])([?&]([-a-zA-Z0-9%.~:_]+)=([-a-zA-Z0-9%.~:_])+)*(#([-a-zA-Z0-9%.~:_]+)?)?)/g,
-                        '$1<a href="$2">$2</a>');
-  const lines = sCopy.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].length > 0) {
-      // handle headings
-      switch(lines[i].charAt(0)) {
-        case '!': // headings
-          let c = 0;
-          while ('!' == lines[i].charAt(c))
-            c++;
-          lines[i] = lines[i].substring(c);
-          c = Math.min(c, 3); // h3 is the biggest
-          c = 4 - c;
-          lines[i] = '<h' + c + '>' + lines[i] + '</h' + c + '>';
-          break;
-        default:
-          // lines[i] = lines[i] + '<br />';
-      }
-    }
-  }
-  return lines.join('');
+  return renderNote(this.text, decodeText);
 }
 /**
  * Generate the xml representing a note (used when we save notes).
@@ -2034,6 +2008,11 @@ export function charRefs(str) {
   return str.replace(/[\u00a0-\u00ff]/g, function(c) {
     return '&#' + c.charCodeAt(0) + ';';
   });
+}
+
+/** decodeCharRefs, for text with any. */
+function decodeText(text) {
+  return text.includes('&') ? decodeCharRefs(text) : text;
 }
 
 /**

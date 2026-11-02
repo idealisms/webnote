@@ -351,16 +351,18 @@ def run_ui(browser, base, name):
           'a number key colors the top note')
     page.keyboard.press('1')
 
-    # Text: wiki headings, links and line breaks; undo and redo.
+    # Text: Markdown, wiki headings, links and line breaks, the old HTML
+    # tags, and nothing else as HTML (markdown.js); undo and redo.
     page.dblclick('#' + a)
-    page.fill('#%stext' % a, '!!Heading\nsee http://example.com/x ok\n<b>bold</b>')
+    page.fill('#%stext' % a, '!!Heading\nsee http://example.com/x ok\n<b>bold</b> **md**\n'
+                             '- item\n<img src=x onerror="window.ran=1"><script>window.ran=1</script>')
     click_background(page)
-    # Today's output, quirks included: the heading keeps its <br>. Change
-    # it on purpose.
     check(page.evaluate('get(%r).innerHTML' % a)
-          == '<h2>Heading<br></h2>see <a href="http://example.com/x">http://example.com/x</a>'
-             ' ok<br><b>bold</b>',
-          '!! makes a heading, URLs become links, and notes render HTML')
+          == '<h2>Heading</h2>see <a href="http://example.com/x">http://example.com/x</a>'
+             ' ok<br><strong>bold</strong> <strong>md</strong><br><ul><li>item</li></ul>',
+          '!! makes a heading, URLs become links, Markdown and old tags render')
+    page.wait_for_timeout(100)
+    check(not page.evaluate('window.ran'), 'scripts and handlers in notes don\'t run')
     undo(page)
     check(page.evaluate('workspace.notes[%r].text' % a) == '', 'undo restores the text')
     redo(page)
@@ -450,7 +452,7 @@ def run_ui(browser, base, name):
         ('see https://example.com/s ok', 'see <a href="https://example.com/s">https://example.com/s</a> ok'),
         ('http://example.com/start', '<a href="http://example.com/start">http://example.com/start</a>'),
         ('!title\nhttp://example.com/a?x=1#top end',
-         '<h3>title<br></h3><a href="http://example.com/a?x=1#top">http://example.com/a?x=1#top</a> end'),
+         '<h3>title</h3><a href="http://example.com/a?x=1#top">http://example.com/a?x=1#top</a> end'),
         ('a\tftp://example.com/f', 'a\t<a href="ftp://example.com/f">ftp://example.com/f</a>'),
         ('nohttp://example.com mailto:x@example.com', 'nohttp://example.com mailto:x@example.com'),
     ]:
@@ -465,7 +467,7 @@ def run_ui(browser, base, name):
     dblclick_in_front(page, a)
     check(not page.evaluate(selectable, a + 'text'), 'except while it is edited')
     click_background(page)
-    page.evaluate('workspace.notes[%r].setText(\'<img src="images/new.gif">\')' % a)
+    page.evaluate("workspace.notes[%r].setText('![i](' + new URL('images/new.gif', location.href) + ')')" % a)
     check(page.evaluate("!document.querySelector('#%s img').dispatchEvent(new MouseEvent("
                         "'mousedown', {bubbles: true, cancelable: true}))" % a),
           'an image in a note can\'t be dragged')
@@ -582,7 +584,8 @@ def run_ui(browser, base, name):
                          body='<return><status value="conflict" update="%d"/></return>' % newer)
     page.click('#saveImg')
     page.wait_for_selector('#conflictDialog[open]')
-    check(saves[-1].endswith('save.py?epoch=1&loaded=%d&client=1' % loaded)
+    client = page.evaluate('workspace.clientVersion')
+    check(saves[-1].endswith('save.py?epoch=1&loaded=%d&client=%d' % (loaded, client))
           and not dialog_open(page, 'collisionDialog')
           and page.evaluate('strings.COLLISION_WARNING') not in save_bodies[-1],
           'a save sends loadedTime, the banner isn\'t saved, and a conflict replaces it')
@@ -621,7 +624,7 @@ def run_ui(browser, base, name):
     page.wait_for_function("get('saveImg').dataset.state == ''")
     check(page.evaluate('saveStates') == ['saving', 'saved', ''],
           'the save icon animates, shows a check, then goes back')
-    check(saves[-1].endswith('&loaded=%d&client=1' % newer) and "noteid='conflict'" not in save_bodies[-1]
+    check(saves[-1].endswith('&loaded=%d&client=%d' % (newer, client)) and "noteid='conflict'" not in save_bodies[-1]
           and page.evaluate('workspace.loadedTime') == newer + 1
           and not dialog_open(page, 'conflictDialog'),
           'save anyway saves from the newer revision, without the warning note')
@@ -663,13 +666,13 @@ def run_ui(browser, base, name):
     recent_urls = []
     def on_recent(route):
         recent_urls.append(route.request.url)
-        route.fulfill(body=str(page_loaded), headers={'X-Webnote-Client': '2'})
+        route.fulfill(body=str(page_loaded), headers={'X-Webnote-Client': str(client + 1)})
     page_loaded = page.evaluate('workspace.loadedTime')
     page.route('**/getrecent.py*', on_recent)
     page.evaluate('window.notReloaded = true; workspace.checkUpdated()')
     page.wait_for_selector('#updatedDialog[open]')
-    check(recent_urls[-1].endswith('&epoch=1&client=1')
-          and page.evaluate('workspace.clientVersion') == 1, 'the page sends its client version')
+    check(recent_urls[-1].endswith('&epoch=1&client=%d' % client) and client >= 2,
+          'the page sends its client version')
     check(not page.evaluate("get('updatedDialog').matches(':modal')")
           and not dialog_open(page, 'collisionDialog')
           and page.locator('#updatedDialog').get_by_role(

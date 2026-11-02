@@ -43,6 +43,35 @@ div.noteHide {
   opacity: 0.2;
 }
 
+/* Markdown in notes (markdown.js). */
+div.note ul, div.note ol, div.noteHide ul, div.noteHide ol {
+  margin: 0;
+  padding-left: 1.5em;
+}
+div.note blockquote, div.noteHide blockquote {
+  margin: 0 0 0 0.2em;
+  padding-left: 0.5em;
+  border-left: 3px solid rgba(0, 0, 0, 0.25);
+}
+div.note pre, div.noteHide pre {
+  margin: 2px 0;
+  white-space: pre-wrap;
+}
+div.note code, div.noteHide code {
+  background: rgba(0, 0, 0, 0.07);
+}
+div.note hr, div.noteHide hr {
+  border: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.35);
+  margin: 4px 0;
+}
+div.note img, div.noteHide img {
+  max-width: 100%;
+}
+div.note h4, div.note h5, div.note h6, div.noteHide h4, div.noteHide h5, div.noteHide h6 {
+  margin: 0;
+}
+
 div.mininote {
   width: 6px;
   height: 7px;
