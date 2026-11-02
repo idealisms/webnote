@@ -471,14 +471,19 @@ function parseDestination(s, i) {
   return {url, end: m.lastIndex};
 }
 
+// Emphasis with * and _ doesn't start or end inside a word, unlike
+// CommonMark's *: notes have 5*3*2 and *.txt far more than in*word*
+// emphasis (most * emphasis in the 2026-11-01 data was inside words).
+const WORD = /[\p{L}\p{N}]/u;
+
 /**
  * Can delim at s[j] close emphasis?  It must be a whole run, after a
- * non-space, and for _, not followed by a letter or digit.
+ * non-space, and (except ~~) not followed by a letter or digit.
  */
 function isCloser(s, j, delim) {
   const after = s[j + delim.length] || '';
   return j > 0 && !/\s/.test(s[j - 1]) && delim[0] != s[j - 1] && delim[0] != after
-      && !('_' == delim[0] && /[\p{L}\p{N}]/u.test(after));
+      && !('~' != delim[0] && WORD.test(after));
 }
 
 /** Where delim first closes after s[i], or -1. */
@@ -608,8 +613,7 @@ const EMPHASIS_TAGS = {'***': ['<strong><em>', '</em></strong>'],
 
 /**
  * Emphasis opening at s[i], a run of n *, _ or ~: the run must be followed
- * by a non-space
- * and close later in the line (for _, outside words).
+ * by a non-space and close later in the line (except ~~, outside words).
  * @return {{html, end}} or null
  */
 function emphasis(s, i, n, lastCloser, inLink, depth) {
@@ -617,7 +621,7 @@ function emphasis(s, i, n, lastCloser, inLink, depth) {
     return null;
   if (n > 3 || /\s/.test(s[i + n] || ' '))
     return null;
-  if ('_' == c && i > 0 && /[\p{L}\p{N}]/u.test(s[i - 1]))
+  if ('~' != c && i > 0 && WORD.test(s[i - 1]))
     return null;
   const delim = c.repeat(n);
   if (!(delim in lastCloser) || lastCloser[delim] <= i)

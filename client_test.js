@@ -86,6 +86,9 @@ test('markdown: inline', async () => {
                + '<strong><em>bi</em></strong> <del>s</del>');
   assert.equal(html('*a **b** c*'), '<em>a <strong>b</strong> c</em>');
   assert.equal(html('snake_case_name 2 * 3 * 4 ** x'), 'snake_case_name 2 * 3 * 4 ** x');
+  assert.equal(html('5*3*2 a**b**c un*frig*gin *.txt and *.md'),
+               '5*3*2 a**b**c un*frig*gin *.txt and *.md', 'not inside words');
+  assert.equal(html('(*a*) "**b**", *c*.'), '(<em>a</em>) &quot;<strong>b</strong>&quot;, <em>c</em>.');
   assert.equal(html('**unclosed and * lone'), '**unclosed and * lone');
   assert.equal(html('`a*b*` ``x`y``'), '<code>a*b*</code> <code>x`y</code>');
   assert.equal(html('\\*not\\* \\[x\\](y) C:\\dir'), '*not* [x](y) C:\\dir');
