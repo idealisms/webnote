@@ -379,7 +379,8 @@ func jsUnescape(s string) (string, error) {
 }
 
 func newTestServer(client *datastore.Client, now time.Time) *server {
-	return &server{client: client, now: func() time.Time { return now }, save: saveWorkspace}
+	return &server{client: client, now: func() time.Time { return now }, save: saveWorkspace,
+		feeds: newFeedCache(feedCacheMaxBytes, feedCacheTTL, time.Now)}
 }
 
 // fixedResponse is how a golden case's response changed on purpose since the
@@ -1084,6 +1085,74 @@ func TestRSSCaching(t *testing.T) {
 	s.ServeHTTP(rec, r)
 	if rec.Code != 404 || rec.Header().Get("Cache-Control") != "" {
 		t.Errorf("missing feed: %d, Cache-Control %q", rec.Code, rec.Header().Get("Cache-Control"))
+	}
+}
+
+// TestRSSServedFromCache checks that a feed is served from memory until it
+// expires or the workspace is saved on this server.
+func TestRSSServedFromCache(t *testing.T) {
+	_, client := newTestClient(t)
+	saved := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
+	s := newTestServer(client, saved)
+	clock := saved
+	s.feeds = newFeedCache(feedCacheMaxBytes, feedCacheTTL, func() time.Time { return clock })
+	// other saves without telling s, like another instance.
+	other := newTestServer(client, saved.Add(time.Second))
+	save := func(s *server, text string) {
+		t.Helper()
+		r := httptest.NewRequest("POST", "/webnote/save.py", strings.NewReader(
+			"<workspace name='feed%20ws' nextNoteNum='1'><note noteid='n'>"+text+"</note></workspace>"))
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, r)
+		if rec.Code != 200 {
+			t.Fatalf("save %q: %d", text, rec.Code)
+		}
+	}
+	feed := func(path string) string {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if rec.Code != 200 {
+			return fmt.Sprint(rec.Code)
+		}
+		_, desc, _ := strings.Cut(rec.Body.String(), "<item><title>")
+		desc, _, _ = strings.Cut(desc, "</title>")
+		return desc
+	}
+	const path = "/webnote/feed%2520ws.xml"
+	if got := feed(path); got != "404" {
+		t.Fatalf("before the first save: %s, want 404", got)
+	}
+	save(s, "one") // drops the cached 404
+	if got := feed(path); got != "one" {
+		t.Fatalf("after saving: %q", got)
+	}
+	save(other, "two")
+	for _, p := range []string{path, "/webnote/rss.py?name=feed%20ws"} {
+		if got := feed(p); got != "one" {
+			t.Errorf("%s within the TTL of another server's save: %q, want the cached one", p, got)
+		}
+	}
+	// A feed of an older revision isn't served from the cache.
+	if got := feed("/webnote/rss.py?name=feed%20ws&time=" + epochMicros(saved.Add(time.Second))); got != "two" {
+		t.Errorf("rss.py with time: %q", got)
+	}
+	clock = clock.Add(feedCacheTTL)
+	if got := feed(path); got != "two" {
+		t.Errorf("after the TTL: %q", got)
+	}
+	s.now = func() time.Time { return saved.Add(2 * time.Second) }
+	save(s, "three")
+	if got := feed(path); got != "three" {
+		t.Errorf("after saving on this server: %q", got)
+	}
+	// A cached feed still answers If-Modified-Since (of the last save).
+	r := httptest.NewRequest("GET", path, nil)
+	r.Header.Set("If-Modified-Since", "Fri, 23 Oct 2026 12:00:02 GMT")
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, r)
+	if rec.Code != 304 || rec.Header().Get("Cache-Control") != "max-age=60" {
+		t.Errorf("If-Modified-Since from the cache: %d, Cache-Control %q", rec.Code, rec.Header().Get("Cache-Control"))
 	}
 }
 

@@ -73,7 +73,8 @@ func main() {
 		port = "8080"
 	}
 	s := &server{client: client, now: time.Now, save: saveWorkspace,
-		project: os.Getenv("GOOGLE_CLOUD_PROJECT"), version: os.Getenv("GAE_VERSION")}
+		project: os.Getenv("GOOGLE_CLOUD_PROJECT"), version: os.Getenv("GAE_VERSION"),
+		feeds: newFeedCache(feedCacheMaxBytes, feedCacheTTL, time.Now)}
 	var handler http.Handler = s
 	if os.Getenv("WEBNOTE_SERVE_STATIC") == "1" {
 		static, err := readStaticHandlers("app.yaml")
@@ -95,6 +96,7 @@ type server struct {
 	version string // GAE_VERSION
 	now     func() time.Time
 	save    func(context.Context, *datastore.Client, string, int64, []note, int64, func() time.Time) (*Workspace, error)
+	feeds   *feedCache // nil caches nothing
 }
 
 // webapp2 answers 501 for methods outside this set, before routing.
@@ -529,26 +531,31 @@ func (s *server) rss(req *request, pathName string, fromPath bool) {
 		s.badRequest(req, err)
 		return
 	}
+	// Only the latest revision's feed is cached; rss.py also takes a time.
+	cacheable := req.params.get("time") == ""
+	key := feedKey{hostURL(req.r), workspaceKeyID(name)}
+	if cacheable {
+		if e := s.feeds.get(key); e != nil {
+			s.writeFeed(req, e.found, e.body, e.lastModified)
+			return
+		}
+	}
+	gen := s.feeds.generation()
 	ws, err := getWorkspace(req.r.Context(), s.client, name)
 	if err != nil {
 		s.serverError(req, err)
 		return
 	} else if ws == nil {
-		req.w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		req.w.WriteHeader(http.StatusNotFound)
+		if cacheable {
+			s.feeds.put(gen, key, false, nil, time.Time{})
+		}
+		s.writeFeed(req, false, nil, time.Time{})
 		return
 	}
-	// A feed only changes when the workspace is saved. Feed readers poll
-	// (one polls every 8 seconds), so let them keep it for a minute, and
-	// answer their If-Modified-Since without reading the notes.
 	lastModified := ws.Time.UTC().Truncate(time.Second)
-	cacheHeaders := func() {
-		req.w.Header().Set("Cache-Control", "max-age=60")
-		req.w.Header().Set("Last-Modified", lastModified.Format(http.TimeFormat))
-	}
-	if since, err := http.ParseTime(req.r.Header.Get("If-Modified-Since")); err == nil && !lastModified.After(since) {
-		cacheHeaders()
-		req.w.WriteHeader(http.StatusNotModified)
+	if notModified(req.r, lastModified) {
+		// Answered without reading the notes, so nothing to cache.
+		s.writeFeed(req, true, nil, lastModified)
 		return
 	}
 	notes, err := s.notesJSON(req, ws)
@@ -561,7 +568,36 @@ func (s *server) rss(req *request, pathName string, fromPath bool) {
 		s.serverError(req, err)
 		return
 	}
-	cacheHeaders()
+	if cacheable {
+		s.feeds.put(gen, key, true, body, lastModified)
+	}
+	s.writeFeed(req, true, body, lastModified)
+}
+
+// notModified is whether a feed last modified at lastModified can be
+// answered with a 304.
+func notModified(r *http.Request, lastModified time.Time) bool {
+	since, err := http.ParseTime(r.Header.Get("If-Modified-Since"))
+	return err == nil && !lastModified.After(since)
+}
+
+// writeFeed answers a feed request: a 404 if the workspace wasn't found, a
+// 304 for a reader that has this version, or the body. A feed only changes
+// when the workspace is saved. Feed readers poll (one polls every 8
+// seconds), so let them keep it for a minute, and answer their
+// If-Modified-Since without reading the notes.
+func (s *server) writeFeed(req *request, found bool, body []byte, lastModified time.Time) {
+	if !found {
+		req.w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		req.w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	req.w.Header().Set("Cache-Control", "max-age=60")
+	req.w.Header().Set("Last-Modified", lastModified.Format(http.TimeFormat))
+	if notModified(req.r, lastModified) {
+		req.w.WriteHeader(http.StatusNotModified)
+		return
+	}
 	writeBody(req.w, "text/xml; charset=utf-8", body)
 }
 
@@ -597,6 +633,9 @@ func (s *server) saveHandler(req *request) {
 		}
 	}
 	ws, err := s.save(req.r.Context(), s.client, save.name, nextNoteNum, save.notes, loaded, s.now)
+	// Even a failed save may have been committed (a transaction can fail
+	// after its commit), so drop the cached feed either way.
+	s.feeds.invalidate(workspaceKeyID(save.name))
 	if errors.Is(err, errConflict) {
 		// Someone else saved since this client loaded the workspace. The
 		// client can save again with this time as loaded.
