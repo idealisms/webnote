@@ -1119,6 +1119,9 @@ func TestRSSServedFromCache(t *testing.T) {
 		desc, _, _ = strings.Cut(desc, "</title>")
 		return desc
 	}
+	var logs bytes.Buffer
+	defer slog.SetDefault(slog.Default())
+	slog.SetDefault(newCloudLogger(&logs))
 	const path = "/webnote/feed%2520ws.xml"
 	if got := feed(path); got != "404" {
 		t.Fatalf("before the first save: %s, want 404", got)
@@ -1153,6 +1156,31 @@ func TestRSSServedFromCache(t *testing.T) {
 	s.ServeHTTP(rec, r)
 	if rec.Code != 304 || rec.Header().Get("Cache-Control") != "max-age=60" {
 		t.Errorf("If-Modified-Since from the cache: %d, Cache-Control %q", rec.Code, rec.Header().Get("Cache-Control"))
+	}
+
+	// Each lookup is logged, with the cache's size after it, for the
+	// webnote_feed_cache metrics.
+	var results []string
+	dec := json.NewDecoder(&logs)
+	for {
+		var line struct {
+			Message, Result string
+			Entries, Bytes  int
+		}
+		if err := dec.Decode(&line); err != nil {
+			break
+		}
+		if line.Message != "feed cache" {
+			continue
+		}
+		results = append(results, line.Result)
+		if line.Entries != 1 || line.Bytes < feedEntryOverhead {
+			t.Errorf("%s logged entries %d, bytes %d; want 1 entry", line.Result, line.Entries, line.Bytes)
+		}
+	}
+	want := "miss miss hit hit bypass miss miss hit"
+	if got := strings.Join(results, " "); got != want {
+		t.Errorf("logged lookups %q, want %q", got, want)
 	}
 }
 

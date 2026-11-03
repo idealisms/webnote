@@ -1,0 +1,16 @@
+# RSS feed requests by how the in-memory feed cache (feedcache.go) answered:
+# hit, miss (read from Datastore) or bypass (rss.py with a time). Each is a
+# "feed cache" log line from logFeedLookup() in server.go.
+description: Webnote RSS feed cache lookups, by result
+filter: >-
+  log_id("stdout") AND resource.type="gae_app"
+  AND jsonPayload.message="feed cache"
+labelExtractors:
+  result: EXTRACT(jsonPayload.result)
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"
+  labels:
+  - key: result
+    valueType: STRING

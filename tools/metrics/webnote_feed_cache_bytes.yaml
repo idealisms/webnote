@@ -1,0 +1,17 @@
+# The in-memory feed cache's size in bytes (entries' bodies plus an
+# estimated overhead; at most feedCacheMaxBytes, 32 MiB), from each "feed
+# cache" log line.
+description: Webnote RSS feed cache size in bytes, at each lookup
+filter: >-
+  log_id("stdout") AND resource.type="gae_app"
+  AND jsonPayload.message="feed cache"
+valueExtractor: EXTRACT(jsonPayload.bytes)
+bucketOptions:
+  exponentialBuckets:
+    numFiniteBuckets: 30
+    growthFactor: 2
+    scale: 64
+metricDescriptor:
+  metricKind: DELTA
+  valueType: DISTRIBUTION
+  unit: By

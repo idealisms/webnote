@@ -536,9 +536,13 @@ func (s *server) rss(req *request, pathName string, fromPath bool) {
 	key := feedKey{hostURL(req.r), workspaceKeyID(name)}
 	if cacheable {
 		if e := s.feeds.get(key); e != nil {
+			s.logFeedLookup(req, "hit")
 			s.writeFeed(req, e.found, e.body, e.lastModified)
 			return
 		}
+		defer s.logFeedLookup(req, "miss")
+	} else {
+		defer s.logFeedLookup(req, "bypass")
 	}
 	gen := s.feeds.generation()
 	ws, err := getWorkspace(req.r.Context(), s.client, name)
@@ -572,6 +576,19 @@ func (s *server) rss(req *request, pathName string, fromPath bool) {
 		s.feeds.put(gen, key, true, body, lastModified)
 	}
 	s.writeFeed(req, true, body, lastModified)
+}
+
+// logFeedLookup logs a feed request's use of the cache, for the
+// webnote_feed_cache metrics (tools/metrics): result is "hit", "miss" (read
+// from Datastore) or "bypass" (not cacheable: a time was asked for). There's
+// no workspace name: names are private.
+func (s *server) logFeedLookup(req *request, result string) {
+	if s.feeds == nil {
+		return
+	}
+	entries, bytes := s.feeds.stats()
+	slog.Info("feed cache", "result", result, "entries", entries, "bytes", bytes,
+		traceAttr(s.project, req.r))
 }
 
 // notModified is whether a feed last modified at lastModified can be

@@ -12,6 +12,8 @@ log and the app's own log lines (`stdout`), and a dashboard that shows them.
 | `webnote_rss` | feed requests (`NAME.xml`, `rss.py`) | `status` (200, 304, 404) |
 | `webnote_js_errors` | reports to `/webnote/jserror` | `version` (of `webnote.js`) |
 | `webnote_clients` | `save.py` and `getrecent.py` requests | `client` (the page's `client=`; empty = from before the handshake), `host`, `endpoint` |
+| `webnote_feed_cache_lookups` | RSS feed requests, by how the in-memory cache answered | `result` (hit, miss, bypass) |
+| `webnote_feed_cache_bytes` | the feed cache's size at each lookup (distribution) | none |
 
 Create or update them all, and the "Webnote" dashboard, with
 `tools/metrics/apply.sh`. It overwrites the dashboard with

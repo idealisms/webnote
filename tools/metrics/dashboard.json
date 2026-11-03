@@ -260,6 +260,84 @@
       {
         "xPos": 0,
         "yPos": 64,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "RSS feed cache hit rate (hits / (hits + misses))",
+          "xyChart": {
+            "chartOptions": {
+              "mode": "COLOR"
+            },
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "minAlignmentPeriod": "3600s",
+                "timeSeriesQuery": {
+                  "timeSeriesFilterRatio": {
+                    "numerator": {
+                      "filter": "metric.type=\"logging.googleapis.com/user/webnote_feed_cache_lookups\" resource.type=\"gae_app\" metric.label.\"result\"=\"hit\"",
+                      "aggregation": {
+                        "alignmentPeriod": "3600s",
+                        "perSeriesAligner": "ALIGN_SUM",
+                        "crossSeriesReducer": "REDUCE_SUM"
+                      }
+                    },
+                    "denominator": {
+                      "filter": "metric.type=\"logging.googleapis.com/user/webnote_feed_cache_lookups\" resource.type=\"gae_app\" metric.label.\"result\"=one_of(\"hit\",\"miss\")",
+                      "aggregation": {
+                        "alignmentPeriod": "3600s",
+                        "perSeriesAligner": "ALIGN_SUM",
+                        "crossSeriesReducer": "REDUCE_SUM"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "hit rate",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 64,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "RSS feed cache size (bytes, hourly p99; limit 32 MiB)",
+          "xyChart": {
+            "chartOptions": {
+              "mode": "COLOR"
+            },
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "minAlignmentPeriod": "3600s",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/webnote_feed_cache_bytes\" resource.type=\"gae_app\"",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_PERCENTILE_99",
+                      "crossSeriesReducer": "REDUCE_MAX"
+                    }
+                  }
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "bytes",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 80,
         "width": 48,
         "height": 8,
         "widget": {

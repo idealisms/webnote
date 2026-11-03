@@ -135,6 +135,17 @@ func (c *feedCache) invalidate(name string) {
 	}
 }
 
+// stats returns the cache's size: its entries and their bytes (as size()
+// counts them).
+func (c *feedCache) stats() (entries, bytes int) {
+	if c == nil {
+		return 0, 0
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.entries), c.bytes
+}
+
 func (c *feedCache) remove(el *list.Element) {
 	e := c.lru.Remove(el).(*feedEntry)
 	delete(c.entries, e.key)
