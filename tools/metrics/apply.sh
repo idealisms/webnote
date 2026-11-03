@@ -1,7 +1,7 @@
 #!/bin/bash
 # Creates or updates Webnote's log-based metrics (the *.yaml files here,
-# named after the file) and creates the "Webnote" dashboard if it doesn't
-# exist yet. See README.md.
+# named after the file) and creates or updates the "Webnote" dashboard from
+# dashboard.json. See README.md.
 set -euo pipefail
 PROJECT=webnote-184120
 cd "$(dirname "$0")"
@@ -16,9 +16,16 @@ for config in *.yaml; do
   fi
 done
 
-if [ -z "$(gcloud monitoring dashboards list --project $PROJECT \
-    --filter='displayName="Webnote"' --format='value(name)')" ]; then
+dashboard=$(gcloud monitoring dashboards list --project $PROJECT \
+    --filter='displayName="Webnote"' --format='value(name)')
+if [ -z "$dashboard" ]; then
   gcloud monitoring dashboards create --config-from-file dashboard.json --project $PROJECT
 else
-  echo "The Webnote dashboard exists; edit it in the console, or delete it and rerun."
+  # Replaces the dashboard with dashboard.json: console edits are lost.
+  etag=$(gcloud monitoring dashboards describe "$dashboard" --format='value(etag)')
+  config=$(mktemp)
+  trap 'rm -f "$config"' EXIT
+  python3 -c 'import json, sys; d = json.load(open("dashboard.json")); d["etag"] = sys.argv[1]; print(json.dumps(d))' \
+    "$etag" > "$config"
+  gcloud monitoring dashboards update "$dashboard" --config-from-file "$config"
 fi

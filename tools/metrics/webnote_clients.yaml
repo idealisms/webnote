@@ -1,0 +1,24 @@
+# Client version of open tabs: save.py and getrecent.py requests, by the
+# `client=` the page sends (clientVersion in server.go; empty = a tab from
+# before the handshake, 94d57f5) and the host the tab was opened on. An
+# open, visible tab polls getrecent.py every 10 minutes, so this counts tab
+# activity, not people.
+description: Webnote save.py and getrecent.py requests, by client version and host
+filter: >-
+  log_id("appengine.googleapis.com/request_log")
+  AND protoPayload.resource=~"^/webnote/(save|getrecent)\.py"
+labelExtractors:
+  client: REGEXP_EXTRACT(protoPayload.resource, "[?&]client=([0-9]+)")
+  host: EXTRACT(protoPayload.host)
+  endpoint: REGEXP_EXTRACT(protoPayload.resource, "^/webnote/(save|getrecent)\\.py")
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"
+  labels:
+  - key: client
+    valueType: STRING
+  - key: host
+    valueType: STRING
+  - key: endpoint
+    valueType: STRING

@@ -11,10 +11,12 @@ log and the app's own log lines (`stdout`), and a dashboard that shows them.
 | `webnote_5xx` | 5xx responses | `status` |
 | `webnote_rss` | feed requests (`NAME.xml`, `rss.py`) | `status` (200, 304, 404) |
 | `webnote_js_errors` | reports to `/webnote/jserror` | `version` (of `webnote.js`) |
+| `webnote_clients` | `save.py` and `getrecent.py` requests | `client` (the page's `client=`; empty = from before the handshake), `host`, `endpoint` |
 
 Create or update them all, and the "Webnote" dashboard, with
-`tools/metrics/apply.sh`. Counting starts when a metric is created; older
-logs aren't counted.
+`tools/metrics/apply.sh`. It overwrites the dashboard with
+`dashboard.json`, so make dashboard changes there. Counting starts when a
+metric is created; older logs aren't counted.
 
 There's no per-workspace label: each label value is a separate time series,
 and workspace names are private. Count active workspaces on demand instead
@@ -26,8 +28,9 @@ Checked 2026-10-26 (https://cloud.google.com/stackdriver/pricing):
 user-defined log-based counters are chargeable Monitoring metrics, at 8
 bytes per data point, and the first 150 MiB per billing account each month
 is free. A time series gets at most one point a minute (43,200 a month, about
-0.33 MiB). These metrics make roughly 10 series at a time (saves by status,
-5xx by status, a few client versions), so a few MiB a month: free.
+0.33 MiB). These metrics make roughly 20 series at a time (saves by status,
+5xx by status, a few client versions, `webnote_clients` by version, host
+and endpoint), so a few MiB a month: free.
 Error Reporting has no charge, and Log Analytics queries have no charge.
 
 ## Active workspaces (Log Analytics)
