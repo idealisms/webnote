@@ -10,6 +10,10 @@ package main
 // drops its workspace's entries, so the instance that took the save serves
 // the new feed at once. Another instance (during a deploy or restart) can
 // serve a feed up to feedCacheTTL old.
+//
+// Expired entries go at the next use of the cache, whichever feed it's for:
+// most feeds are bots' one-off requests, and nothing else would remove those
+// until the size limit did, months later.
 
 import (
 	"container/list"
@@ -21,7 +25,7 @@ const (
 	feedCacheTTL      = 60 * time.Second
 	feedCacheMaxBytes = 32 << 20
 	// feedEntryOverhead approximates an entry's memory besides its body
-	// and key strings (the list element, map entry and struct).
+	// and key strings (the list elements, map entry and struct).
 	feedEntryOverhead = 200
 )
 
@@ -36,6 +40,7 @@ type feedEntry struct {
 	body         []byte // the rendered feed, if found
 	lastModified time.Time
 	expires      time.Time
+	queued       *list.Element // its element in feedCache.queue
 }
 
 func (e *feedEntry) size() int {
@@ -50,7 +55,13 @@ type feedCache struct {
 	now      func() time.Time
 	entries  map[feedKey]*list.Element // of *feedEntry
 	lru      *list.List                // most recently used first
-	bytes    int
+	// queue holds the *feedEntry values, oldest put first. That's also expiry
+	// order, since the TTL is constant and put() re-inserts, while lru isn't,
+	// since get() reorders it. A queue rather than a full sweep every TTL: a
+	// sweep would leave a dead entry for up to another TTL (and in stats()),
+	// and this costs a poll one comparison unless something has expired.
+	queue *list.List
+	bytes int
 	// gen counts invalidations. A feed read before a save finished mustn't
 	// be stored after the save dropped the old entry, so put() takes the
 	// gen from before the read and stores nothing if it changed.
@@ -59,7 +70,7 @@ type feedCache struct {
 
 func newFeedCache(maxBytes int, ttl time.Duration, now func() time.Time) *feedCache {
 	return &feedCache{maxBytes: maxBytes, ttl: ttl, now: now,
-		entries: map[feedKey]*list.Element{}, lru: list.New()}
+		entries: map[feedKey]*list.Element{}, lru: list.New(), queue: list.New()}
 }
 
 // generation is the value to pass to put() for a feed read from now on.
@@ -79,17 +90,13 @@ func (c *feedCache) get(key feedKey) *feedEntry {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.expire()
 	el, ok := c.entries[key]
 	if !ok {
 		return nil
 	}
-	e := el.Value.(*feedEntry)
-	if !c.now().Before(e.expires) {
-		c.remove(el)
-		return nil
-	}
 	c.lru.MoveToFront(el)
-	return e
+	return el.Value.(*feedEntry)
 }
 
 // put stores a feed read when generation() was gen, unless the cache was
@@ -108,10 +115,13 @@ func (c *feedCache) put(gen uint64, key feedKey, found bool, body []byte, lastMo
 	if gen != c.gen {
 		return
 	}
+	// Before evicting below, so that dead entries go instead of live ones.
+	c.expire()
 	if el, ok := c.entries[key]; ok {
 		c.remove(el)
 	}
 	e.expires = c.now().Add(c.ttl)
+	e.queued = c.queue.PushBack(e)
 	c.entries[key] = c.lru.PushFront(e)
 	c.bytes += e.size()
 	for c.bytes > c.maxBytes {
@@ -143,11 +153,27 @@ func (c *feedCache) stats() (entries, bytes int) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.expire()
 	return len(c.entries), c.bytes
+}
+
+// expire removes the entries whose time is up, so nothing else needs to check
+// expires. It can stop at the first live entry because now() doesn't go back
+// (time.Now is monotonic).
+func (c *feedCache) expire() {
+	now := c.now()
+	for el := c.queue.Front(); el != nil; el = c.queue.Front() {
+		e := el.Value.(*feedEntry)
+		if now.Before(e.expires) {
+			return
+		}
+		c.remove(c.entries[e.key])
+	}
 }
 
 func (c *feedCache) remove(el *list.Element) {
 	e := c.lru.Remove(el).(*feedEntry)
+	c.queue.Remove(e.queued)
 	delete(c.entries, e.key)
 	c.bytes -= e.size()
 }
