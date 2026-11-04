@@ -26,19 +26,21 @@ python3 browsertest.py http://localhost:8080   # needs Playwright, see the scrip
   `go test -short` skips the slow ones (a few minutes).
 * Deploy
 ```sh
-./deploy.sh [--no-promote] [--workspace NAME ...]
+./deploy.sh [--auto-promote] [--workspace NAME ...]
 ```
   This runs `go vet` and `go test -short`, deploys a new version without
-  traffic, and runs `smoketest.py` against it. The smoke test waits for the
-  version's first instance, saves two revisions to the `webnote_smoketest`
-  workspace, checks loading, history and RSS, and compares any `--workspace`
-  names (read-only) with the live site. If the smoke test passes, the script
-  sends all traffic to the new version and smoke-tests the live site.
-  Otherwise, or with `--no-promote`, the new version is left without traffic.
-  The script refuses to deploy uncommitted changes unless `ALLOW_DIRTY=1` is
+  traffic, and runs `smoketest.py` and `browsertest.py` against it (the browser
+  test needs [uv](https://docs.astral.sh/uv/), which fetches Playwright and its
+  browsers). The smoke test waits for the version's first instance, saves two
+  revisions to the `webnote_smoketest` workspace, checks loading, history and
+  RSS, and compares any `--workspace` names (read-only) with the live site. If
+  a test fails, the script stops. If they pass, the new version stays without
+  traffic, to try before promoting it, and the script prints how to promote it.
+  With `--auto-promote`, it instead sends all traffic to the new version and
+  smoke-tests the live site. The script refuses to deploy uncommitted changes unless `ALLOW_DIRTY=1` is
   set.
 * Compare two deployed versions on real workspaces (read-only), e.g. a new
-  version deployed with `--no-promote` against the live site
+  version just deployed against the live site
 ```sh
 python3 difftest.py https://VERSION-dot-webnote-184120.uc.r.appspot.com \
     https://www.aypwip.org --names-file NAMES_FILE --sample 200
