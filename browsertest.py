@@ -771,7 +771,8 @@ def run_home(browser, base, name):
     check(page.eval_on_selector('#using video', 'v => v.videoWidth') == 960, 'the screencast loads')
     hrefs = page.eval_on_selector_all('footer a', 'as => as.map(a => a.href)')
     check(hrefs == ['mailto:webnote@ponderer.org', 'https://github.com/idealisms/webnote',
-                    'https://github.com/idealisms/webnote/issues'], 'the footer links')
+                    'https://github.com/idealisms/webnote/issues',
+                    'https://laserpuzzle.ponderer.org/'], 'the footer links')
     check(not problems, 'no JavaScript errors on the home page%s' % (
         '' if not problems else ': %s' % problems))
     page.close()
